@@ -26,12 +26,12 @@ section below. Everything else is automated — see [Releasing](README.md#releas
 
 ### Notes
 
-- **Subtitle burn-in ends playback, and no jetio change can fix it.** Selecting a downloaded
-  `.srt` with burn-in enabled drops the player back to the item page. Jellyfin detects the
-  subtitle's character set by opening it with the *media source's* protocol instead of the
-  subtitle's own — fine when both are local files, fatal when a `.strm` source is `Http` and the
-  `.srt` beside it is not. Set *Burn subtitles* to **Never** in the client; separate-file delivery
-  works. See [Subtitles not appearing](README.md#the-player-exits-when-an-external-subtitle-is-selected).
+- **Subtitle burn-in ends playback on non-UTF-8 subtitle files, and no jetio change can fix it.**
+  Windows-1251 Cyrillic `.srt` files make ffmpeg exit with `Invalid UTF-8 in decoded subtitles
+  text`, so nothing is produced and the player returns to the item page. It affects local media
+  and jetio items alike. Convert the files to UTF-8, or set *Burn subtitles* to **Never** in the
+  client — separate-file delivery converts them correctly.
+  See [The player exits when an external subtitle is selected](README.md#the-player-exits-when-an-external-subtitle-is-selected).
 
 ## [1.0.0] - 2026-08-14
 

@@ -253,33 +253,50 @@ subtitles appear, this option will fix it far more cheaply.
 
 ### The player exits when an external subtitle is selected
 
-A different failure, with a different cause. Embedded tracks play fine, and picking a downloaded
-`.srt` — the ones Subbuzz or Open Subtitles write next to the `.strm` — drops you straight back to
-the item page.
+Embedded tracks play fine, and picking a `.srt` file drops you straight back to the item page.
+This affects jetio items and ordinary local media equally — it is not a jetio fault.
 
-**Turn subtitle burn-in off in the client.** In the web client that is Settings → Playback →
-*Burn subtitles*, set to **Never**. Delivering the subtitle as a separate file works correctly;
-burning it into the video is the path that fails.
-
-The cause is a Jellyfin bug that this library layout is unusually good at triggering. To burn a
-subtitle in, Jellyfin first detects the file's character set, and it opens the subtitle using the
-**media source's** protocol rather than the subtitle's own:
+The root cause is the subtitle file's **encoding**. Cyrillic subtitles are still commonly
+distributed as Windows-1251 rather than UTF-8, and burning one into the picture fails on it:
 
 ```
-System.NotSupportedException: The 'file' scheme is not supported.
-   at SubtitleEncoder.GetStream(String path, MediaProtocol protocol, ...)
-   at SubtitleEncoder.GetSubtitleFileCharacterSet(...)
-   at EncodingHelper.GetTextSubtitlesFilter(...)
+[srt] Invalid UTF-8 in decoded subtitles text; maybe missing -sub_charenc option
+[AVFilterGraph] Error initializing filters
+Error opening output files: Invalid data found when processing input
 ```
 
-For an ordinary library both are local files and it works. A `.strm` media source is `Http` while
-the `.srt` beside it is a local file, so Jellyfin tries to fetch a filesystem path over HTTP and
-throws. The exception kills the HLS segment request, so playback ends rather than degrading.
+ffmpeg exits, so there is no output at all and playback ends rather than degrading.
 
-This only affects **external** subtitles: embedded tracks are extracted from the container and
-skip character-set detection entirely, which is why they keep working. It applies to the plugin's
-sources and the default `.strm` source alike — the fault is in how the subtitle is delivered, not
-in which source was chosen.
+Jellyfin is supposed to prevent this by detecting the character set and passing `-sub_charenc`.
+Two things stop it:
+
+- **No language on the subtitle.** Detection only runs for a stream that has one, and a file named
+  `Film.srt` has none. Name it `Film.bg.srt` and Jellyfin tags it Bulgarian, which both enables
+  detection and lets the track be chosen by language.
+- **A remote media source.** Detection opens the subtitle using the *media source's* protocol
+  rather than the subtitle's own, so for a `.strm` — an `Http` source with a local `.srt` beside
+  it — Jellyfin tries to fetch a filesystem path over HTTP and throws
+  `NotSupportedException: The 'file' scheme is not supported`. Same outcome, and no filename
+  change avoids it.
+
+**The permanent fix is to convert the files to UTF-8.** Everything works afterwards, on every
+client and both delivery paths. List the offenders first:
+
+```bash
+find /mnt/media -name '*.srt' -exec sh -c 'iconv -f UTF-8 -t UTF-8 "$1" >/dev/null 2>&1 || echo "$1"' _ {} \;
+```
+
+Then convert one, keeping the original until it is verified:
+
+```bash
+cp "Film.bg.srt" "Film.bg.srt.bak" && iconv -f CP1251 -t UTF-8 "Film.bg.srt.bak" > "Film.bg.srt"
+```
+
+**The immediate workaround is to turn burn-in off** — in the web client, Settings → Playback →
+*Burn subtitles* → **Never**. Delivered as a separate file the subtitle is converted by Jellyfin
+in managed code, which detects the encoding correctly and is unaffected by either problem above.
+Note that image-based subtitles (PGS, VobSub) can *only* be burned in, so those still need the
+files themselves to be sound.
 
 ## Choosing what lands in the library
 
