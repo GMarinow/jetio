@@ -1,0 +1,14 @@
+# One title per line, by IMDb id.
+#
+# The type prefix is optional — without it jetio asks Cinemeta whether the id is a
+# film or a show, which costs one extra lookup per line.
+#
+#   movie:tt0133093     explicit film
+#   series:tt0903747    explicit show
+#   tt0111161           type probed automatically
+#
+# Blank lines and lines starting with # are ignored.
+
+movie:tt0133093
+series:tt0903747
+tt0111161

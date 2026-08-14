@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>jetio</title>
+</head>
+<body>
+<div id="JetioConfigPage" data-role="page" class="page type-interior pluginConfigurationPage">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="JetioConfigForm">
+                <div class="verticalSection">
+                    <div class="sectionTitleContainer flex align-items-center">
+                        <h2 class="sectionTitle">jetio</h2>
+                    </div>
+                    <p class="fieldDescription">
+                        Adds Torrentio releases as selectable versions on items in your jetio library.
+                    </p>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="Enabled" name="Enabled" type="checkbox" is="emby-checkbox" />
+                        <span>Enable version picker</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        When off, items fall back to the single release chosen by jetio.
+                    </div>
+                </div>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="ServeThroughJellyfin" name="ServeThroughJellyfin" type="checkbox" is="emby-checkbox" />
+                        <span>Serve playback through Jellyfin</span>
+                    </label>
+                    <div class="fieldDescription checkboxFieldDescription">
+                        Jellyfin repackages the stream instead of sending players to it directly.
+                        Video and audio are copied, not re-encoded. Turn this on if external
+                        subtitles are listed but never appear — some clients, including the
+                        Android TV app, cannot add subtitles to a stream Jellyfin never handled.
+                        Costs a little bandwidth through the server and makes seeking slower.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <input id="JetioBaseUrl" name="JetioBaseUrl" type="url" is="emby-input"
+                           label="jetio base URL" required />
+                    <div class="fieldDescription">
+                        For example http://192.168.1.10:9000 — must be reachable from this
+                        server and from playback devices.
+                    </div>
+                </div>
+
+                <div class="inputContainer">
+                    <input id="TimeoutSeconds" name="TimeoutSeconds" type="number" is="emby-input"
+                           min="1" max="120" label="Lookup timeout (seconds)" required />
+                    <div class="fieldDescription">
+                        Lookups happen while the item page loads. Keep this short.
+                    </div>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        var JetioPluginConfig = { pluginUniqueId: 'b8f3d2a1-7c4e-4f89-9a2b-6d5e3c1f8a70' };
+
+        document.querySelector('#JetioConfigPage')
+            .addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(JetioPluginConfig.pluginUniqueId).then(function (config) {
+                    document.querySelector('#Enabled').checked = config.Enabled;
+                    document.querySelector('#ServeThroughJellyfin').checked = config.ServeThroughJellyfin;
+                    document.querySelector('#JetioBaseUrl').value = config.JetioBaseUrl || '';
+                    document.querySelector('#TimeoutSeconds').value = config.TimeoutSeconds || 20;
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+        document.querySelector('#JetioConfigForm')
+            .addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(JetioPluginConfig.pluginUniqueId).then(function (config) {
+                    config.Enabled = document.querySelector('#Enabled').checked;
+                    config.ServeThroughJellyfin = document.querySelector('#ServeThroughJellyfin').checked;
+                    config.JetioBaseUrl = document.querySelector('#JetioBaseUrl').value;
+                    config.TimeoutSeconds = parseInt(document.querySelector('#TimeoutSeconds').value, 10);
+                    ApiClient.updatePluginConfiguration(JetioPluginConfig.pluginUniqueId, config)
+                        .then(Dashboard.processPluginConfigurationUpdateResult);
+                });
+                return false;
+            });
+    </script>
+</div>
+</body>
+</html>

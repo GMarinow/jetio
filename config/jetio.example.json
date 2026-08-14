@@ -1,0 +1,47 @@
+{
+  "//": "Optional. Copy to jetio.json for settings you do not want in docker-compose.yml.",
+  "//host-addresses": "Do NOT set PublicBaseUrl, StremioServer.BaseUrl or Jellyfin.BaseUrl here — compose supplies them from .env, and duplicating them here is how you end up debugging a stale address.",
+
+  "Jetio": {
+    "Torrentio": {
+      "//": "Paste the config segment from your Stremio install URL, e.g. 'providers=yts,eztv|sort=qualitysize', or 'realdebrid=<apikey>' for debrid. Empty means Torrentio defaults.",
+      "Configuration": ""
+    },
+
+    "StreamSelection": {
+      "ResolutionPriority": [ "1080p", "720p", "2160p" ],
+      "MinSeeders": 5,
+      "MaxSizeGb": 15,
+      "CacheMinutes": 30
+    },
+
+    "Catalogs": {
+      "Cinemeta": {
+        "//": "Start with this off until one title plays; series/top alone writes ~1700 files.",
+        "Enabled": false,
+        "Catalogs": [ "movie/top", "series/top" ],
+        "MaxItemsPerCatalog": 40
+      },
+      "Watchlist": {
+        "Enabled": true,
+        "Path": "/config/watchlist.txt"
+      },
+      "Tmdb": {
+        "Enabled": false,
+        "ApiKey": "your-tmdb-key-or-v4-read-token",
+        "Lists": [ "movie/popular", "trending/movie/week", "tv/popular" ]
+      },
+      "Trakt": {
+        "Enabled": false,
+        "ClientId": "your-trakt-client-id",
+        "AccessToken": "",
+        "Lists": [ "users/me/watchlist/movies", "users/me/watchlist/shows" ]
+      }
+    },
+
+    "Sync": {
+      "RunOnStartup": true,
+      "IntervalHours": 12
+    }
+  }
+}

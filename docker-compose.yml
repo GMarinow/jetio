@@ -1,0 +1,64 @@
+# jetio and the Stremio streaming server run on the docker host; Jellyfin may live
+# elsewhere (a separate VM or box). Hence two addresses, not one:
+#
+#   JETIO_HOST_IP  - this docker host. Players are redirected here, so it must be a
+#                    real LAN address, never localhost or a docker service name.
+#   JELLYFIN_IP    - wherever Jellyfin actually runs; used only to trigger rescans.
+#
+# JETIO_LIBRARY_PATH must be a directory Jellyfin can also read. If Jellyfin is on
+# another machine that means shared storage (NFS/SMB/virtiofs), not a local folder.
+
+services:
+  stremio-server:
+    image: stremio/server:latest
+    container_name: stremio-server
+    restart: unless-stopped
+    ports:
+      # 11471 is the bridge below, not the server itself. The server's own 11470 is
+      # deliberately not published — nothing could reach it there anyway.
+      - "11471:11471"
+    volumes:
+      - ./cache:/root/.stremio-server
+    environment:
+      # jetio talks to it cross-origin; without this the server rejects the requests.
+      - NO_CORS=1
+
+  # The official image binds EngineFS to 127.0.0.1 *inside* its own container (upstream
+  # does this so browsers don't flag mixed content). Docker publishes ports by forwarding
+  # to the container's eth0 address, so a published 11470 gets connection-refused.
+  #
+  # This sidecar joins the same network namespace, so it can reach that loopback, and
+  # re-listens on 0.0.0.0:11471 where Docker can actually forward to it.
+  stremio-bridge:
+    image: alpine/socat:latest
+    container_name: stremio-bridge
+    restart: unless-stopped
+    depends_on:
+      - stremio-server
+    network_mode: "service:stremio-server"
+    command: ["TCP-LISTEN:11471,fork,reuseaddr", "TCP:127.0.0.1:11470"]
+
+  jetio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jetio:latest
+    container_name: jetio
+    restart: unless-stopped
+    depends_on:
+      - stremio-server
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./config:/config
+      # Left side must be the path Jellyfin has mounted as its jetio library.
+      - ${JETIO_LIBRARY_PATH:-./library}:/library
+    environment:
+      # jetio and the streaming server both run HERE, on the docker host.
+      - Jetio__PublicBaseUrl=http://${JETIO_HOST_IP:?set JETIO_HOST_IP in .env}:9000
+      - Jetio__StremioServer__BaseUrl=http://${JETIO_HOST_IP}:11471
+      # Jellyfin is somewhere else, so it gets its own address.
+      - Jetio__Jellyfin__BaseUrl=http://${JELLYFIN_IP:?set JELLYFIN_IP in .env}:8096
+      - Jetio__Jellyfin__ApiKey=${JELLYFIN_API_KEY:-}
+      # Comma-separated; expanded by Program.cs. Empty means every library is rescanned.
+      - JELLYFIN_LIBRARY_NAMES=${JELLYFIN_LIBRARY_NAMES:-}

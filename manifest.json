@@ -1,0 +1,12 @@
+[
+  {
+    "guid": "b8f3d2a1-7c4e-4f89-9a2b-6d5e3c1f8a70",
+    "name": "jetio",
+    "description": "Offers Torrentio releases as selectable versions in the Jellyfin player.",
+    "overview": "Adds a version picker to items in your jetio library.",
+    "owner": "jetio",
+    "category": "General",
+    "imageUrl": "",
+    "versions": []
+  }
+]

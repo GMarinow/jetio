@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>jetio</title>
+<style>
+/*
+  jetio holds no media — only pointers to it. That is literally what a .strm file is, and it is
+  also what a card catalog is: a drawer of cards telling you where the thing lives. So this is a
+  catalog, not a storefront. The system speaks in typewriter; the films speak in book type.
+  The one flourish is the stamp.
+*/
+:root {
+  --ink:     #14181b;
+  --ink-2:   #1b2126;
+  --ink-3:   #232b31;
+  --rule:    #2c343a;
+  --manila:  #ddd2b8;
+  --type:    #e0e5e7;
+  --muted:   #7b878f;
+  --stamp:   #8b6ae0;
+  --stamp-2: #6a4bb8;
+  --danger:  #d4685f;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --book: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+
+  /* Card geometry is fixed so every card is identical regardless of title length. */
+  --record-height: 96px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--type);
+  font-family: var(--mono);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--stamp); outline-offset: 2px; }
+
+.wrap { max-width: 1600px; margin: 0 auto; padding: 0 24px; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+.masthead .wrap { display: flex; align-items: center; gap: 18px; height: 60px; }
+
+.wordmark {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.wordmark span { color: var(--stamp); }
+
+.views { display: flex; gap: 2px; }
+.view {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.view:hover { color: var(--type); }
+.view[aria-pressed="true"] { color: var(--type); background: var(--ink-2); border-color: var(--rule); }
+.view .tally {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--stamp-2);
+  color: #fff;
+  font-size: 11px;
+}
+
+.finder { display: flex; gap: 8px; margin-left: auto; flex: 1; min-width: 0; max-width: 380px; }
+.finder input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.finder input::placeholder { color: var(--muted); }
+.finder button {
+  height: 34px;
+  padding: 0 14px;
+  background: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: .06em;
+}
+.finder button:hover { border-color: var(--stamp-2); }
+
+/* ---------- filter bar ---------- */
+
+.filters { border-bottom: 1px solid var(--rule); background: var(--ink); }
+.filters .wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+.segmented { display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.segmented button {
+  padding: 7px 16px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: .06em;
+}
+.segmented button + button { border-left: 1px solid var(--rule); }
+.segmented button:hover { color: var(--type); }
+.segmented button[aria-pressed="true"] { background: var(--manila); color: var(--ink); font-weight: 600; }
+
+.field { display: flex; align-items: center; gap: 7px; }
+.field label { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.field select {
+  height: 32px;
+  padding: 0 26px 0 10px;
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+                    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 14px, calc(100% - 10px) 14px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.field select:hover { border-color: var(--stamp-2); }
+
+.reset {
+  padding: 7px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.reset:hover { color: var(--type); border-color: var(--rule); }
+
+.count { margin-left: auto; color: var(--muted); font-size: 12px; letter-spacing: .06em; }
+
+/* ---------- grid ---------- */
+
+main { padding: 22px 0 70px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 22px 16px;
+  align-items: start;
+}
+
+.card { display: grid; grid-template-rows: auto var(--record-height); min-width: 0; }
+
+.plate {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.card:hover .plate { border-color: var(--stamp-2); }
+.plate img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plate .noart {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 10px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--book);
+}
+
+/* The signature: a rubber date-stamp pressed onto anything already in the library. */
+.stamp {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  translate: -50% -50%;
+  rotate: -9deg;
+  padding: 5px 12px 4px;
+  border: 2px solid var(--stamp);
+  border-radius: 3px;
+  background: rgba(20, 24, 27, .58);
+  color: var(--stamp);
+  text-align: center;
+  pointer-events: none;
+}
+.stamp b { display: block; font-size: 13px; font-weight: 700; letter-spacing: .2em; }
+.stamp i { display: block; font-size: 9px; font-style: normal; letter-spacing: .12em; opacity: .85; }
+
+@keyframes press {
+  0%   { opacity: 0; scale: 1.9; rotate: -18deg; }
+  55%  { opacity: 1; scale: .93; rotate: -7deg; }
+  100% { opacity: 1; scale: 1;   rotate: -9deg; }
+}
+.stamp.fresh { animation: press .3s cubic-bezier(.2,.9,.3,1.2) both; }
+
+.record { display: flex; flex-direction: column; padding-top: 9px; min-width: 0; }
+
+.record .name {
+  margin: 0;
+  font-family: var(--book);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  /* Two lines always, so short and long titles occupy identical space. */
+  height: 2.5em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.record .ref {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: .04em;
+  padding: 3px 0 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.act {
+  margin-top: auto;
+  height: 28px;
+  background: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: .08em;
+  font-size: 11px;
+}
+.act:hover:not(:disabled) { border-color: var(--stamp); color: var(--stamp); }
+.act:disabled { opacity: .5; cursor: default; }
+.act.remove { color: var(--muted); }
+.act.remove:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+
+.more { display: flex; justify-content: center; padding: 36px 0 0; }
+.more button {
+  padding: 10px 28px;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: .12em;
+  color: var(--muted);
+}
+.more button:hover:not(:disabled) { color: var(--type); border-color: var(--stamp-2); }
+
+.notice {
+  padding: 26px;
+  border: 1px dashed var(--rule);
+  border-radius: 3px;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 580px;
+}
+.notice strong { display: block; margin-bottom: 4px; color: var(--type); font-weight: 600; }
+.notice .act { display: inline-block; margin-top: 14px; padding: 0 16px; }
+
+.skeleton {
+  aspect-ratio: 2/3;
+  background: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  opacity: .5;
+}
+
+/* ---------- toast ---------- */
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  translate: -50% 90px;
+  padding: 11px 18px;
+  background: var(--ink-3);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--stamp);
+  border-radius: 3px;
+  transition: translate .2s ease, opacity .2s ease;
+  opacity: 0;
+  pointer-events: none;
+  max-width: 90vw;
+  z-index: 40;
+}
+#toast.show { translate: -50% 0; opacity: 1; }
+#toast.bad { border-left-color: var(--danger); }
+
+@media (max-width: 760px) {
+  .wrap { padding: 0 14px; }
+  .masthead .wrap { flex-wrap: wrap; height: auto; padding-top: 12px; padding-bottom: 12px; }
+  .finder { max-width: none; order: 3; flex-basis: 100%; }
+  .filters .wrap { gap: 9px; }
+  .count { margin-left: 0; flex-basis: 100%; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 18px 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <h1 class="wordmark">jet<span>io</span></h1>
+    <div class="views">
+      <button class="view" data-nav="browse" aria-pressed="true">Browse</button>
+      <button class="view" data-nav="library" aria-pressed="false">In library <span class="tally" id="tally">0</span></button>
+    </div>
+    <form class="finder" id="finder">
+      <input id="q" type="search" placeholder="Search by title…" autocomplete="off" aria-label="Search by title" />
+      <button type="submit">Search</button>
+    </form>
+  </div>
+</header>
+
+<section class="filters" id="filters">
+  <div class="wrap">
+    <div class="segmented">
+      <button data-type="movie" aria-pressed="true">Films</button>
+      <button data-type="series" aria-pressed="false">Shows</button>
+    </div>
+
+    <div class="field">
+      <label for="sort">Order</label>
+      <select id="sort">
+        <option value="top">Popular</option>
+        <option value="imdbRating">Highest rated</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="genre">Genre</label>
+      <select id="genre"><option value="">Any</option></select>
+    </div>
+
+    <div class="field">
+      <label for="year">Year</label>
+      <select id="year"><option value="">Any</option></select>
+    </div>
+
+    <button class="reset" id="reset" hidden>Clear filters</button>
+    <div class="count" id="count"></div>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="grid" id="grid"></div>
+  <div id="notice"></div>
+  <div class="more" id="more" hidden><button id="moreBtn">Load more</button></div>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const state = {
+  nav: 'browse', type: 'movie', sort: 'top', genre: '', year: '',
+  query: '', skip: 0, hasMore: false, loading: false, items: []
+};
+
+let ratingCatalogFromYear = 2020;
+let toastTimer;
+
+function toast(message, bad) {
+  const el = $('toast');
+  el.textContent = message;
+  el.className = 'show' + (bad ? ' bad' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+/* ---------- controls ---------- */
+
+function syncControls() {
+  for (const btn of document.querySelectorAll('[data-nav]')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.nav === state.nav));
+  }
+  for (const btn of document.querySelectorAll('[data-type]')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.type === state.type));
+  }
+  $('sort').value = state.sort;
+  $('genre').value = state.genre;
+  $('year').value = state.year;
+
+  const browsing = state.nav === 'browse' && !state.query;
+  $('filters').hidden = !browsing;
+  $('reset').hidden = !(browsing && (state.genre || state.year || state.sort !== 'top'));
+}
+
+function describe() {
+  if (state.nav === 'library') return `${state.items.length} in library`;
+  if (state.query) return `${state.items.length} result${state.items.length === 1 ? '' : 's'} for “${state.query}”`;
+  return `${state.items.length} shown`;
+}
+
+/* ---------- cards ---------- */
+
+function stampNode(item, fresh) {
+  const stamp = document.createElement('div');
+  stamp.className = 'stamp' + (fresh ? ' fresh' : '');
+  const b = document.createElement('b');
+  b.textContent = 'ADDED';
+  const i = document.createElement('i');
+  i.textContent = (item.addedAt || new Date().toISOString()).slice(0, 10);
+  stamp.append(b, i);
+  return stamp;
+}
+
+function noArt(name) {
+  const div = document.createElement('div');
+  div.className = 'noart';
+  div.textContent = name || 'No artwork';
+  return div;
+}
+
+function cardNode(item) {
+  const card = document.createElement('article');
+  card.className = 'card';
+
+  const plate = document.createElement('div');
+  plate.className = 'plate';
+
+  if (item.poster) {
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.alt = '';
+    img.src = item.poster;
+    img.onerror = () => img.replaceWith(noArt(item.name));
+    plate.appendChild(img);
+  } else {
+    plate.appendChild(noArt(item.name));
+  }
+
+  const record = document.createElement('div');
+  record.className = 'record';
+
+  const name = document.createElement('h3');
+  name.className = 'name';
+  name.textContent = item.name;
+  name.title = item.name;
+
+  const ref = document.createElement('div');
+  ref.className = 'ref';
+  ref.textContent = [item.year, item.imdbId].filter(Boolean).join(' · ');
+
+  const act = document.createElement('button');
+  act.className = 'act';
+
+  record.append(name, ref, act);
+  card.append(plate, record);
+
+  // One card renderer for both views: what differs is only whether it is already yours.
+  applyState(item, card, plate, act, item.inLibrary || state.nav === 'library', false);
+  return card;
+}
+
+function applyState(item, card, plate, act, inLibrary, fresh) {
+  plate.querySelector('.stamp')?.remove();
+
+  if (inLibrary) {
+    plate.appendChild(stampNode(item, fresh));
+    act.className = 'act remove';
+    act.textContent = 'Remove';
+    act.disabled = false;
+    act.onclick = () => remove(item, card, plate, act);
+  } else {
+    act.className = 'act';
+    act.textContent = 'Add';
+    act.disabled = false;
+    act.onclick = () => add(item, card, plate, act);
+  }
+}
+
+/* ---------- rendering ---------- */
+
+function showSkeletons() {
+  const grid = $('grid');
+  grid.textContent = '';
+  for (let i = 0; i < 14; i++) {
+    const s = document.createElement('div');
+    s.className = 'skeleton';
+    grid.appendChild(s);
+  }
+}
+
+function notice(strong, detail, action) {
+  $('notice').textContent = '';
+  if (!strong) return;
+  const box = document.createElement('div');
+  box.className = 'notice';
+  const head = document.createElement('strong');
+  head.textContent = strong;
+  box.append(head, document.createTextNode(detail));
+  if (action) {
+    const button = document.createElement('button');
+    button.className = 'act';
+    button.textContent = action.label;
+    button.onclick = action.run;
+    box.append(document.createElement('br'), button);
+  }
+  $('notice').appendChild(box);
+}
+
+function renderGrid(append) {
+  const grid = $('grid');
+  const from = append ? grid.children.length : 0;
+  if (!append) grid.textContent = '';
+  for (const item of state.items.slice(from)) grid.appendChild(cardNode(item));
+  $('more').hidden = !(state.nav === 'browse' && !state.query && state.hasMore);
+  $('count').textContent = describe();
+}
+
+/* ---------- data ---------- */
+
+async function reload() {
+  state.skip = 0;
+  state.items = [];
+  await load(false);
+}
+
+async function load(append) {
+  if (state.loading) return;
+  state.loading = true;
+  if (!append) { showSkeletons(); notice(''); }
+
+  try {
+    let url;
+    if (state.nav === 'library') {
+      url = '/api/library';
+    } else if (state.query) {
+      url = `/api/search?q=${encodeURIComponent(state.query)}&type=all`;
+    } else {
+      const p = new URLSearchParams({ type: state.type, sort: state.sort, skip: String(state.skip) });
+      if (state.genre) p.set('genre', state.genre);
+      if (state.year) p.set('year', state.year);
+      url = `/api/browse?${p}`;
+    }
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!response.ok) {
+      $('grid').textContent = '';
+      notice('That did not load.', data.error || 'jetio returned an error. Check its logs.');
+      return;
+    }
+
+    if (Array.isArray(data)) {
+      state.items = data;
+      state.hasMore = false;
+    } else {
+      state.items = append ? state.items.concat(data.items) : data.items;
+      state.skip = data.nextSkip;
+      state.hasMore = data.hasMore && data.items.length > 0;
+    }
+
+    renderGrid(append);
+    if (!state.items.length) explainEmpty();
+  } catch (e) {
+    $('grid').textContent = '';
+    notice('Cannot reach jetio.', 'The service may be restarting. Reload in a moment.');
+  } finally {
+    state.loading = false;
+  }
+}
+
+function explainEmpty() {
+  if (state.nav === 'library') {
+    notice('Nothing here yet.', 'Browse or search, then press Add. Titles appear in Jellyfin within seconds.');
+  } else if (state.query) {
+    notice('No match for that title.', 'Try fewer words, or check the spelling.');
+  } else if (state.sort === 'imdbRating' && state.year && state.year !== 'older' && +state.year < ratingCatalogFromYear) {
+    notice(
+      'Highest rated only covers recent releases.',
+      `That catalog starts around ${ratingCatalogFromYear}, so it holds nothing from ${state.year}. Popular reaches back much further.`,
+      { label: 'Switch to Popular', run: () => { state.sort = 'top'; syncControls(); reload(); } });
+  } else {
+    notice(
+      'Nothing matches those filters.',
+      'This combination is empty. Widen the year or pick another genre.',
+      { label: 'Clear filters', run: clearFilters });
+  }
+}
+
+async function add(item, card, plate, act) {
+  act.disabled = true;
+  act.textContent = 'Adding…';
+  try {
+    const response = await fetch('/api/library', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imdbId: item.imdbId, kind: item.kind })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.added) {
+      applyState(item, card, plate, act, false, false);
+      toast(data.error || 'Could not add that title.', true);
+      return;
+    }
+    item.inLibrary = true;
+    item.addedAt = data.item?.addedAt;
+    applyState(item, card, plate, act, true, true);
+    toast(`Added ${item.name}`);
+    refreshTally();
+  } catch (e) {
+    applyState(item, card, plate, act, false, false);
+    toast('Cannot reach jetio.', true);
+  }
+}
+
+async function remove(item, card, plate, act) {
+  act.disabled = true;
+  act.textContent = 'Removing…';
+  try {
+    const response = await fetch(`/api/library/${item.kind}/${item.imdbId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      applyState(item, card, plate, act, true, false);
+      toast('Could not remove that title.', true);
+      return;
+    }
+    toast(`Removed ${item.name}`);
+    refreshTally();
+
+    // In the library view the card no longer belongs; while browsing it stays, addable again.
+    if (state.nav === 'library') {
+      state.items = state.items.filter(i => !(i.imdbId === item.imdbId && i.kind === item.kind));
+      card.remove();
+      $('count').textContent = describe();
+      if (!state.items.length) explainEmpty();
+    } else {
+      item.inLibrary = false;
+      applyState(item, card, plate, act, false, false);
+    }
+  } catch (e) {
+    applyState(item, card, plate, act, true, false);
+    toast('Cannot reach jetio.', true);
+  }
+}
+
+async function refreshTally() {
+  try {
+    const items = await (await fetch('/api/library')).json();
+    $('tally').textContent = items.length;
+  } catch { /* the tally is cosmetic; a failure here should not surface */ }
+}
+
+function clearFilters() {
+  state.genre = '';
+  state.year = '';
+  state.sort = 'top';
+  syncControls();
+  reload();
+}
+
+/* ---------- wiring ---------- */
+
+$('finder').addEventListener('submit', e => {
+  e.preventDefault();
+  const value = $('q').value.trim();
+  if (value && value.length < 2) { toast('Search needs at least two characters.', true); return; }
+  state.query = value;
+  state.nav = 'browse';
+  syncControls();
+  reload();
+});
+
+for (const btn of document.querySelectorAll('[data-nav]')) {
+  btn.onclick = () => { state.nav = btn.dataset.nav; state.query = ''; $('q').value = ''; syncControls(); reload(); };
+}
+for (const btn of document.querySelectorAll('[data-type]')) {
+  btn.onclick = () => { state.type = btn.dataset.type; syncControls(); reload(); };
+}
+for (const [id, key] of [['sort', 'sort'], ['genre', 'genre'], ['year', 'year']]) {
+  $(id).onchange = () => { state[key] = $(id).value; syncControls(); reload(); };
+}
+$('reset').onclick = clearFilters;
+$('moreBtn').onclick = async () => {
+  const btn = $('moreBtn');
+  btn.disabled = true;
+  btn.textContent = 'Loading…';
+  await load(true);
+  btn.disabled = false;
+  btn.textContent = 'Load more';
+};
+
+(async function start() {
+  const yearSelect = $('year');
+  const thisYear = new Date().getFullYear();
+  for (let y = thisYear; y >= 1980; y--) {
+    yearSelect.add(new Option(String(y), String(y)));
+  }
+  yearSelect.add(new Option('Before 1980', 'older'));
+
+  try {
+    const meta = await (await fetch('/api/genres')).json();
+    if (meta.ratingCatalogFromYear) ratingCatalogFromYear = meta.ratingCatalogFromYear;
+    for (const genre of meta.genres) $('genre').add(new Option(genre, genre));
+  } catch { /* genre filtering is optional; browsing still works without it */ }
+
+  syncControls();
+  refreshTally();
+  await reload();
+})();
+</script>
+</body>
+</html>

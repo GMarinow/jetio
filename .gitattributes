@@ -1,0 +1,6 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Shell scripts are executed inside Linux containers and by CI. CRLF would break them,
+# and this repository is developed on Windows.
+*.sh text eol=lf

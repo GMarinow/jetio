@@ -1,0 +1,162 @@
+name: release
+
+# Releases are driven by version.json, not by tagging manually.
+#
+#   1. bump "version" in version.json
+#   2. add a matching "## [x.y.z]" section to CHANGELOG.md
+#   3. push to main
+#
+# This workflow then creates the tag, builds and packages the plugin, publishes a GitHub
+# Release, and commits an updated manifest.json so Jellyfin can install it.
+#
+# It only fires when version.json changes, so the manifest commit it makes cannot retrigger it.
+# It is also idempotent: if the tag already exists, it does nothing.
+on:
+  push:
+    branches: [main]
+    paths: ['version.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version.json
+        id: meta
+        run: |
+          set -euo pipefail
+          version="$(jq -r '.version' version.json)"
+          abi="$(jq -r '.targetAbi' version.json)"
+
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error file=version.json::version must be MAJOR.MINOR.PATCH, got '$version'"
+            exit 1
+          fi
+
+          echo "version=$version"        >> "$GITHUB_OUTPUT"
+          echo "plugin=${version}.0"     >> "$GITHUB_OUTPUT"
+          echo "abi=$abi"                >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}"         >> "$GITHUB_OUTPUT"
+
+      - name: Skip if already released
+        id: guard
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${{ steps.meta.outputs.tag }}" >/dev/null; then
+            echo "::notice::${{ steps.meta.outputs.tag }} already exists; nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.guard.outputs.proceed == 'true'
+        with:
+          dotnet-version: '9.0.x'
+
+      # The plugin builds standalone, so without this a release could ship while the service
+      # it talks to does not compile — which is exactly how a missing source file slipped by.
+      - name: Build service
+        if: steps.guard.outputs.proceed == 'true'
+        run: dotnet build src/Jetio/Jetio.csproj -c Release
+
+      - name: Build and package plugin
+        id: package
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          # Same script the Docker build and CI use, so every path produces an identical
+          # package carrying the version from version.json.
+          bash scripts/package-plugin.sh "${PWD}/dist" | tee -a "$GITHUB_OUTPUT"
+          echo "checksum=$(md5sum dist/*.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # Release notes come from CHANGELOG.md so there is one place to describe a change.
+      - name: Extract release notes
+        id: notes
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          awk -v v="${{ steps.meta.outputs.version }}" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/       { exit }
+            found                   { print }
+          ' CHANGELOG.md | sed '/^[[:space:]]*$/d' > notes.md || true
+
+          if [ -s notes.md ]; then
+            echo "have_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning file=CHANGELOG.md::No '## [${{ steps.meta.outputs.version }}]' section found; falling back to generated notes."
+            echo "have_notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.meta.outputs.tag }}" -m "Release ${{ steps.meta.outputs.tag }}"
+          git push origin "${{ steps.meta.outputs.tag }}"
+
+      - name: Publish GitHub release
+        if: steps.guard.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.notes.outputs.have_notes }}" = "true" ]; then
+            gh release create "${{ steps.meta.outputs.tag }}" \
+              --title "${{ steps.meta.outputs.tag }}" \
+              --notes-file notes.md \
+              "${{ steps.package.outputs.path }}"
+          else
+            gh release create "${{ steps.meta.outputs.tag }}" \
+              --title "${{ steps.meta.outputs.tag }}" \
+              --generate-notes \
+              "${{ steps.package.outputs.path }}"
+          fi
+
+      # Jellyfin verifies the package against this checksum and refuses to install on a
+      # mismatch, so the manifest can only be written once the artefact exists.
+      - name: Update manifest.json
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          source_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.meta.outputs.tag }}/${{ steps.package.outputs.name }}"
+          changelog="$( [ -s notes.md ] && head -c 1000 notes.md || echo 'See the GitHub release notes.' )"
+
+          jq \
+            --arg version   "${{ steps.meta.outputs.plugin }}" \
+            --arg checksum  "${{ steps.package.outputs.checksum }}" \
+            --arg sourceUrl "$source_url" \
+            --arg abi       "${{ steps.meta.outputs.abi }}" \
+            --arg changelog "$changelog" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '.[0].versions = ([{
+                version:   $version,
+                changelog: $changelog,
+                targetAbi: $abi,
+                sourceUrl: $sourceUrl,
+                checksum:  $checksum,
+                timestamp: $timestamp
+              }] + (.[0].versions | map(select(.version != $version))))' \
+            manifest.json > manifest.tmp
+
+          mv manifest.tmp manifest.json
+
+      - name: Commit manifest
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          git add manifest.json
+          # [skip ci] because this commit only republishes the catalogue.
+          git commit -m "Publish plugin ${{ steps.meta.outputs.plugin }} [skip ci]"
+          git push origin HEAD:main

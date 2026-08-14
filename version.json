@@ -1,0 +1,5 @@
+{
+  "$comment": "Single source of truth for releases. Bump `version`, add a matching section to CHANGELOG.md, and push to main — the release workflow tags, builds, publishes and updates manifest.json on its own. Nothing else needs editing.",
+  "version": "1.0.0",
+  "targetAbi": "10.11.0.0"
+}

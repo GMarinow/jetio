@@ -1,0 +1,30 @@
+# Build output. Unanchored on purpose — these appear under every project.
+bin/
+obj/
+.vs/
+.idea/
+
+# ---------------------------------------------------------------------------
+# Runtime data and local secrets.
+#
+# These MUST stay anchored with a leading slash so they only match the folders
+# at the repository root. An unanchored "library/" also matches src/Jetio/Library/,
+# which silently excluded five source files and broke CI with
+# "the type or namespace name 'Library' does not exist" — git's ignore matching
+# is case-insensitive on Windows and macOS.
+# ---------------------------------------------------------------------------
+/artifacts/
+/cache/
+/library/
+/.env
+
+# Local configuration, copied from the *.example files.
+/config/jetio.json
+/config/watchlist.txt
+/config/library.json
+
+# Built plugin packages, produced by the Docker build or build-plugin.ps1.
+/src/Jetio/wwwroot/plugin/
+
+# cache
+**/cache

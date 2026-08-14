@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Catches a malformed version.json before it reaches main, where it would trigger a release.
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version.json
+        run: |
+          set -euo pipefail
+          version="$(jq -er '.version' version.json)"
+          jq -er '.targetAbi' version.json > /dev/null
+
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error file=version.json::version must be MAJOR.MINOR.PATCH, got '$version'"
+            exit 1
+          fi
+
+          if ! grep -q "^## \[${version}\]" CHANGELOG.md; then
+            echo "::warning file=CHANGELOG.md::No '## [${version}]' section. The release will fall back to generated notes."
+          fi
+
+          echo "version.json is valid: ${version}"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore src/Jetio/Jetio.csproj
+          dotnet restore src/Jellyfin.Plugin.Jetio/Jellyfin.Plugin.Jetio.csproj
+
+      # Both projects build with warnings-as-errors, so this is the style gate too.
+      - name: Build service
+        run: dotnet build src/Jetio/Jetio.csproj -c Release --no-restore
+
+      - name: Build plugin
+        run: dotnet build src/Jellyfin.Plugin.Jetio/Jellyfin.Plugin.Jetio.csproj -c Release --no-restore
+
+      # Runs the same packaging the release uses, and asserts the artefact carries the version
+      # from version.json. Catches a hardcoded version reappearing anywhere in the build.
+      - name: Package plugin and verify its version
+        run: |
+          set -euo pipefail
+          bash scripts/package-plugin.sh "${PWD}/dist" > package.out
+          cat package.out
+
+          expected="$(jq -r '.version' version.json).0"
+          abi="$(jq -r '.targetAbi' version.json)"
+
+          test -f "dist/jellyfin-plugin-jetio-${expected}.zip" \
+            || { echo "::error::expected dist/jellyfin-plugin-jetio-${expected}.zip"; ls -l dist; exit 1; }
+
+          unzip -p "dist/jellyfin-plugin-jetio-${expected}.zip" meta.json > meta.out
+          got_version="$(jq -r '.version' meta.out)"
+          got_abi="$(jq -r '.targetAbi' meta.out)"
+
+          test "$got_version" = "$expected" \
+            || { echo "::error::meta.json version is '$got_version', expected '$expected'"; exit 1; }
+          test "$got_abi" = "$abi" \
+            || { echo "::error::meta.json targetAbi is '$got_abi', expected '$abi'"; exit 1; }
+
+          echo "packaged plugin ${got_version} for ABI ${got_abi}"
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Proves the container build works, including the plugin packaging step inside it.
+      - name: Build image
+        run: docker build -t jetio:ci .
