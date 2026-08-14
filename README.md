@@ -251,6 +251,36 @@ A quick way to confirm the diagnosis before changing anything: cap the client's 
 below the file's. That forces a transcode, which also puts Jellyfin in the data path. If
 subtitles appear, this option will fix it far more cheaply.
 
+### The player exits when an external subtitle is selected
+
+A different failure, with a different cause. Embedded tracks play fine, and picking a downloaded
+`.srt` — the ones Subbuzz or Open Subtitles write next to the `.strm` — drops you straight back to
+the item page.
+
+**Turn subtitle burn-in off in the client.** In the web client that is Settings → Playback →
+*Burn subtitles*, set to **Never**. Delivering the subtitle as a separate file works correctly;
+burning it into the video is the path that fails.
+
+The cause is a Jellyfin bug that this library layout is unusually good at triggering. To burn a
+subtitle in, Jellyfin first detects the file's character set, and it opens the subtitle using the
+**media source's** protocol rather than the subtitle's own:
+
+```
+System.NotSupportedException: The 'file' scheme is not supported.
+   at SubtitleEncoder.GetStream(String path, MediaProtocol protocol, ...)
+   at SubtitleEncoder.GetSubtitleFileCharacterSet(...)
+   at EncodingHelper.GetTextSubtitlesFilter(...)
+```
+
+For an ordinary library both are local files and it works. A `.strm` media source is `Http` while
+the `.srt` beside it is a local file, so Jellyfin tries to fetch a filesystem path over HTTP and
+throws. The exception kills the HLS segment request, so playback ends rather than degrading.
+
+This only affects **external** subtitles: embedded tracks are extracted from the container and
+skip character-set detection entirely, which is why they keep working. It applies to the plugin's
+sources and the default `.strm` source alike — the fault is in how the subtitle is delivered, not
+in which source was chosen.
+
 ## Choosing what lands in the library
 
 Five sources, all optional, merged and de-duplicated by IMDb id.

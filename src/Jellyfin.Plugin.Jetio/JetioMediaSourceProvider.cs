@@ -4,6 +4,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
@@ -19,11 +20,16 @@ namespace Jellyfin.Plugin.Jetio;
 public class JetioMediaSourceProvider : IMediaSourceProvider
 {
     private readonly JetioClient _jetio;
+    private readonly IMediaSourceManager _mediaSourceManager;
     private readonly ILogger<JetioMediaSourceProvider> _logger;
 
-    public JetioMediaSourceProvider(JetioClient jetio, ILogger<JetioMediaSourceProvider> logger)
+    public JetioMediaSourceProvider(
+        JetioClient jetio,
+        IMediaSourceManager mediaSourceManager,
+        ILogger<JetioMediaSourceProvider> logger)
     {
         _jetio = jetio;
+        _mediaSourceManager = mediaSourceManager;
         _logger = logger;
     }
 
@@ -57,12 +63,63 @@ public class JetioMediaSourceProvider : IMediaSourceProvider
             return Array.Empty<MediaSourceInfo>();
         }
 
-        _logger.LogDebug("jetio offered {Count} versions for {Item}", candidates.Count, item.Name);
+        var subtitles = GetExternalSubtitleStreams(item);
+
+        _logger.LogDebug(
+            "jetio offered {Count} versions for {Item}, each carrying {Subtitles} external subtitle(s)",
+            candidates.Count,
+            item.Name,
+            subtitles.Count);
 
         return candidates
-            .Select(candidate => ToMediaSource(candidate, item, configuration.ServeThroughJellyfin))
+            .Select(candidate => ToMediaSource(
+                candidate,
+                item,
+                configuration.ServeThroughJellyfin,
+                CopySubtitleStreams(subtitles)))
             .ToList();
     }
+
+    /// <summary>
+    /// The subtitle files sitting next to the .strm — fetched by Subbuzz or Open Subtitles, or
+    /// dropped in by hand. Jellyfin indexes those against the *item*, and only attaches them to
+    /// the source it builds from the .strm itself. The sources this plugin returns are separate,
+    /// so unless they are copied across, picking a release from the version picker leaves the
+    /// player with no subtitle tracks to offer at all.
+    ///
+    /// External only, deliberately: an embedded track belongs to whichever release the .strm
+    /// currently resolves to, and its index means nothing inside a different release's container.
+    /// </summary>
+    private IReadOnlyList<MediaStream> GetExternalSubtitleStreams(BaseItem item) =>
+        _mediaSourceManager
+            .GetMediaStreams(new MediaStreamQuery { ItemId = item.Id, Type = MediaStreamType.Subtitle })
+            .Where(stream => stream.IsExternal && !string.IsNullOrEmpty(stream.Path))
+            .ToList();
+
+    /// <summary>
+    /// Every source needs its own copies. Jellyfin writes the delivery method and URL onto these
+    /// objects while answering a playback request, and the URL carries the source id — so sharing
+    /// instances would leave all versions pointing at whichever one was processed last.
+    /// </summary>
+    private static List<MediaStream> CopySubtitleStreams(IReadOnlyList<MediaStream> streams) =>
+        streams
+            .Select((stream, index) => new MediaStream
+            {
+                // Numbered from zero because these sources carry nothing else. The index is what
+                // Jellyfin puts in the subtitle URL and looks straight back up on this source.
+                Index = index,
+                Type = MediaStreamType.Subtitle,
+                Codec = stream.Codec,
+                Path = stream.Path,
+                IsExternal = true,
+                SupportsExternalStream = true,
+                Language = stream.Language,
+                Title = stream.Title,
+                IsDefault = stream.IsDefault,
+                IsForced = stream.IsForced,
+                IsHearingImpaired = stream.IsHearingImpaired,
+            })
+            .ToList();
 
     private async Task<IReadOnlyList<JetioCandidate>> GetMovieSourcesAsync(
         Movie movie,
@@ -99,7 +156,8 @@ public class JetioMediaSourceProvider : IMediaSourceProvider
     private static MediaSourceInfo ToMediaSource(
         JetioCandidate candidate,
         BaseItem item,
-        bool serveThroughJellyfin) => new()
+        bool serveThroughJellyfin,
+        List<MediaStream> subtitleStreams) => new()
     {
         Id = BuildId(candidate, item),
         Name = candidate.Name,
@@ -116,7 +174,7 @@ public class JetioMediaSourceProvider : IMediaSourceProvider
         RequiresOpening = false,
         RequiresClosing = false,
         IsInfiniteStream = false,
-        MediaStreams = [],
+        MediaStreams = subtitleStreams,
         MediaAttachments = [],
     };
 

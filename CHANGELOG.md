@@ -10,6 +10,29 @@ section below. Everything else is automated — see [Releasing](README.md#releas
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-14
+
+### Fixed
+
+- **Subtitles on releases picked from the version picker.** The plugin described every release it
+  offered as having no streams at all, so choosing one left the player with nothing to switch on —
+  in every client, the web one included. Jellyfin indexes the `.srt` files next to a `.strm`
+  against the item and attaches them only to the source it builds from the `.strm` itself; the
+  plugin's sources are separate and were never given them. They are now copied onto each release
+  the picker offers.
+
+  Embedded tracks are deliberately not copied: those belong to whichever release the `.strm`
+  currently resolves to, and their indexes mean nothing inside a different release's container.
+
+### Notes
+
+- **Subtitle burn-in ends playback, and no jetio change can fix it.** Selecting a downloaded
+  `.srt` with burn-in enabled drops the player back to the item page. Jellyfin detects the
+  subtitle's character set by opening it with the *media source's* protocol instead of the
+  subtitle's own — fine when both are local files, fatal when a `.strm` source is `Http` and the
+  `.srt` beside it is not. Set *Burn subtitles* to **Never** in the client; separate-file delivery
+  works. See [Subtitles not appearing](README.md#the-player-exits-when-an-external-subtitle-is-selected).
+
 ## [1.0.0] - 2026-08-14
 
 First release.
@@ -54,5 +77,6 @@ First release.
 - The Stremio streaming server binds to loopback inside its own container, so `docker-compose.yml`
   includes a `stremio-bridge` sidecar that re-exposes it on port 11471.
 
-[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/GMarinow/jetio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/GMarinow/jetio/releases/tag/v1.0.0
