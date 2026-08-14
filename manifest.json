@@ -7,6 +7,15 @@
     "owner": "jetio",
     "category": "General",
     "imageUrl": "",
-    "versions": []
+    "versions": [
+      {
+        "version": "1.0.0.0",
+        "changelog": "First release.\n### Added\n- **Library service.** Writes a `.strm` tree Jellyfin reads as a normal library, and resolves\n  each entry to a live stream at play time so links never go stale.\n- **Web UI** for browsing and adding titles, with filters for type, order, genre and year.\n- **Jellyfin plugin** exposing every eligible release as a selectable version in the player,\n  with seeder counts and file sizes.\n- **Plugin repository** served by jetio itself, so the plugin can be installed from Jellyfin's\n  dashboard without internet access or a published release.\n- **Kids routing.** Animated titles are written to `Kids/Movies` and `Kids/Shows` so they can be\n  separate Jellyfin libraries with their own user access.\n- **Release verification.** Torrentio occasionally indexes the wrong film against an IMDb id — a\n  rip of *Iron Man* appears under *Spider-Man: Brand New Day*. Quality filtering makes this worse\n  rather than better, because for an unreleased title every genuine release is a cam ",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GMarinow/jetio/releases/download/v1.0.0/jellyfin-plugin-jetio-1.0.0.0.zip",
+        "checksum": "8cf3ae693b1bbf1aa00d600bef2d03c4",
+        "timestamp": "2026-08-14T14:17:24Z"
+      }
+    ]
   }
 ]
