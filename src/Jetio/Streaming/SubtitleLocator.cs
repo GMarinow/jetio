@@ -140,30 +140,57 @@ public sealed class SubtitleLocator
             return null;
         }
 
-        try
+        var lower = candidate.ToLowerInvariant();
+
+        // Deliberately a table rather than CultureInfo. The runtime image has no ICU data, so
+        // every culture lookup throws there — the sort of difference that passes every test on a
+        // developer machine and then silently drops the language on the server.
+        if (TwoToThreeLetter.TryGetValue(lower, out var mapped))
         {
-            return new CultureInfo(candidate).ThreeLetterISOLanguageName;
+            return mapped;
         }
-        catch (CultureNotFoundException)
-        {
-            return null;
-        }
+
+        // Already three letters, or a code not in the table: pass it through. ffmpeg and Matroska
+        // accept any string here, and a slightly wrong tag beats no tag at all — players will not
+        // enable a subtitle track whose language they cannot determine.
+        return lower.Length == 3 ? lower : null;
     }
 
-    private static string BuildTitle(string? language)
+    /// <summary>
+    /// ISO 639-1 to 639-2/T for the languages subtitles actually arrive in. Matroska, HLS and
+    /// ffmpeg all expect the three-letter form.
+    /// </summary>
+    private static readonly Dictionary<string, string> TwoToThreeLetter = new(StringComparer.Ordinal)
     {
-        if (language is null)
-        {
-            return "External";
-        }
+        ["bg"] = "bul", ["cs"] = "ces", ["da"] = "dan", ["de"] = "deu", ["el"] = "ell",
+        ["en"] = "eng", ["es"] = "spa", ["et"] = "est", ["fi"] = "fin", ["fr"] = "fra",
+        ["he"] = "heb", ["hr"] = "hrv", ["hu"] = "hun", ["is"] = "isl", ["it"] = "ita",
+        ["ja"] = "jpn", ["ko"] = "kor", ["lt"] = "lit", ["lv"] = "lav", ["mk"] = "mkd",
+        ["nl"] = "nld", ["no"] = "nor", ["pl"] = "pol", ["pt"] = "por", ["ro"] = "ron",
+        ["ru"] = "rus", ["sk"] = "slk", ["sl"] = "slv", ["sr"] = "srp", ["sv"] = "swe",
+        ["tr"] = "tur", ["uk"] = "ukr", ["zh"] = "zho",
+    };
 
-        try
-        {
-            return CultureInfo.GetCultureInfo(language).EnglishName;
-        }
-        catch (CultureNotFoundException)
-        {
-            return language;
-        }
-    }
+    private static string BuildTitle(string? language) =>
+        language is null ? "External" : DescribeLanguage(language);
+
+    /// <summary>
+    /// "bul" → "Bulgarian", for the label a player shows in its subtitle menu. A table again, for
+    /// the same reason: culture lookups throw in the runtime image.
+    /// </summary>
+    internal static string DescribeLanguage(string language) =>
+        LanguageNames.TryGetValue(language, out var name) ? name : language.ToUpperInvariant();
+
+    private static readonly Dictionary<string, string> LanguageNames = new(StringComparer.Ordinal)
+    {
+        ["bul"] = "Bulgarian", ["ces"] = "Czech", ["dan"] = "Danish", ["deu"] = "German",
+        ["ell"] = "Greek", ["eng"] = "English", ["spa"] = "Spanish", ["est"] = "Estonian",
+        ["fin"] = "Finnish", ["fra"] = "French", ["heb"] = "Hebrew", ["hrv"] = "Croatian",
+        ["hun"] = "Hungarian", ["isl"] = "Icelandic", ["ita"] = "Italian", ["jpn"] = "Japanese",
+        ["kor"] = "Korean", ["lit"] = "Lithuanian", ["lav"] = "Latvian", ["mkd"] = "Macedonian",
+        ["nld"] = "Dutch", ["nor"] = "Norwegian", ["pol"] = "Polish", ["por"] = "Portuguese",
+        ["ron"] = "Romanian", ["rus"] = "Russian", ["slk"] = "Slovak", ["slv"] = "Slovenian",
+        ["srp"] = "Serbian", ["swe"] = "Swedish", ["tur"] = "Turkish", ["ukr"] = "Ukrainian",
+        ["zho"] = "Chinese",
+    };
 }

@@ -8,6 +8,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Releases are cut by bumping `version` in [version.json](version.json) and adding a matching
 section below. Everything else is automated — see [Releasing](README.md#releasing).
 
+## [1.2.1] - 2026-08-14
+
+### Fixed
+
+- **Subtitle tracks were advertised with no language.** Every subtitle came through as
+  "External" with no `LANGUAGE`, regardless of a `.bg` suffix on the filename. Players will not
+  switch on a text track whose language they cannot determine, so the track was effectively
+  unusable even though it was being served correctly.
+
+  The two-letter to three-letter conversion went through `CultureInfo`, which throws
+  `CultureNotFoundException` for every code in the runtime image — .NET runs there without ICU
+  data, in globalization-invariant mode. It works on a developer machine and fails everywhere it
+  matters. Replaced with an explicit table, so the result no longer depends on what the host has
+  installed.
+
+- **Unnamed subtitle files fall back to `Subtitles.DefaultLanguage`** rather than staying
+  undetermined, so a file without a language suffix is still selectable.
+
 ## [1.2.0] - 2026-08-14
 
 ### Changed
@@ -141,7 +159,8 @@ First release.
 - The Stremio streaming server binds to loopback inside its own container, so `docker-compose.yml`
   includes a `stremio-bridge` sidecar that re-exposes it on port 11471.
 
-[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/GMarinow/jetio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/GMarinow/jetio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/GMarinow/jetio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/GMarinow/jetio/compare/v1.0.0...v1.0.1

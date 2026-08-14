@@ -28,7 +28,35 @@ public sealed class SubtitleDelivery
             ? _locator.ForMovie(title.ImdbId)
             : _locator.ForEpisode(title.ImdbId, title.Season.Value, title.Episode.Value);
 
-        return Order(tracks);
+        return Order(NameUnknownLanguages(tracks));
+    }
+
+    /// <summary>
+    /// A file with no language suffix would otherwise be advertised as undetermined, and players
+    /// will not switch a text track on by themselves when they cannot tell what language it is —
+    /// ExoPlayer needs a language to match against before it will enable one. Falling back to the
+    /// configured preference is far better than leaving the track unusable, since a library whose
+    /// subtitles are all one language is the normal case.
+    /// </summary>
+    private IReadOnlyList<SubtitleTrack> NameUnknownLanguages(IReadOnlyList<SubtitleTrack> tracks)
+    {
+        if (string.IsNullOrWhiteSpace(_options.DefaultLanguage))
+        {
+            return tracks;
+        }
+
+        var fallback = SubtitleLocator.ExtractLanguage($"x.{_options.DefaultLanguage}.srt");
+
+        if (fallback is null)
+        {
+            return tracks;
+        }
+
+        return tracks
+            .Select(t => t.Language is null
+                ? t with { Language = fallback, Title = SubtitleLocator.DescribeLanguage(fallback) }
+                : t)
+            .ToList();
     }
 
     public bool ShouldServeThroughJetio(IReadOnlyList<SubtitleTrack> tracks) =>
