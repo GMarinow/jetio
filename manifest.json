@@ -9,6 +9,14 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "1.1.0.0",
+        "changelog": "### Added\n- **Subtitle files are muxed into the stream.** When a title has subtitles beside its `.strm`,\n  jetio now serves the release through ffmpeg with those tracks embedded, instead of redirecting\n  the player to the streaming server.\n  This is the only arrangement several clients render reliably. A separate subtitle file has to be\n  side-loaded onto a stream the player fetched from somewhere else, and the Jellyfin Android TV\n  app does not do that — the track appears in the menu and never draws. An embedded track is read\n  straight out of the container the player is already decoding, so there is nothing to side-load.\n  Releases that happen to ship their own subtitles always worked on that TV for exactly this\n  reason; this gives downloaded ones the same standing.\n  Nothing is re-encoded — video and audio are copied and only the container is rebuilt — so the\n  cost is bandwidth through jetio, not CPU. It engages **only** for titles that actually have\n  subtitle files, so eve",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GMarinow/jetio/releases/download/v1.1.0/jellyfin-plugin-jetio-1.1.0.0.zip",
+        "checksum": "3e75477a4358e6a987ce77273168e290",
+        "timestamp": "2026-08-14T17:07:05Z"
+      },
+      {
         "version": "1.0.1.0",
         "changelog": "### Fixed\n- **Subtitles on releases picked from the version picker.** The plugin described every release it\n  offered as having no streams at all, so choosing one left the player with nothing to switch on —\n  in every client, the web one included. Jellyfin indexes the `.srt` files next to a `.strm`\n  against the item and attaches them only to the source it builds from the `.strm` itself; the\n  plugin's sources are separate and were never given them. They are now copied onto each release\n  the picker offers.\n  Embedded tracks are deliberately not copied: those belong to whichever release the `.strm`\n  currently resolves to, and their indexes mean nothing inside a different release's container.\n### Notes\n- **Subtitle burn-in ends playback, and no jetio change can fix it.** Selecting a downloaded\n  `.srt` with burn-in enabled drops the player back to the item page. Jellyfin detects the\n  subtitle's character set by opening it with the *media source's* protocol instead of the\n  subtitle'",
         "targetAbi": "10.11.0.0",
