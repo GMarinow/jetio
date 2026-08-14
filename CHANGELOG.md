@@ -8,7 +8,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Releases are cut by bumping `version` in [version.json](version.json) and adding a matching
 section below. Everything else is automated — see [Releasing](README.md#releasing).
 
-## [Unreleased]
+## [1.2.0] - 2026-08-14
+
+### Changed
+
+- **Subtitled titles are served as HLS, so they can be seeked.** 1.1.0 delivered subtitles by
+  rebuilding the release as one long Matroska stream. That worked — subtitles rendered on clients
+  that had never shown them — but it made scrubbing impossible, and the two are not independent.
+
+  ffmpeg writes a container's duration and seek index by going back over its own output once it
+  knows them, and it was writing to a pipe. The result declared itself a live stream of unknown
+  length with no index, so players had nothing to seek against and could only restart from the
+  beginning.
+
+  A playlist has no such problem. The whole film is declared up front from the duration alone, so
+  jumping two thirds of the way in is a request for a different segment rather than a guess into
+  an unindexed container. Video and audio are still copied rather than re-encoded.
+
+  Subtitles are now WebVTT renditions of the playlist rather than muxed tracks, because MPEG-TS
+  segments cannot carry SubRip. This is ordinary HLS — the arrangement every streaming service
+  uses — and it is handled inside the player's HLS engine, so it is not the side-loading of a
+  separate file that clients were failing at.
+
+### Notes
+
+- Segment boundaries are nominal. Copying a stream means ffmpeg cuts at the nearest keyframe
+  rather than exactly on the second, so real segments drift slightly from the declared durations.
+  Players tolerate this, and Jellyfin's own remuxing path makes the same trade — it is what allows
+  seeking to work without re-encoding the video.
+- `Jetio__Subtitles__MuxIntoStream` keeps its name and meaning: whether titles with subtitles are
+  served through jetio at all.
 
 ## [1.1.0] - 2026-08-14
 
@@ -112,7 +141,8 @@ First release.
 - The Stremio streaming server binds to loopback inside its own container, so `docker-compose.yml`
   includes a `stremio-bridge` sidecar that re-exposes it on port 11471.
 
-[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/GMarinow/jetio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/GMarinow/jetio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/GMarinow/jetio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/GMarinow/jetio/releases/tag/v1.0.0

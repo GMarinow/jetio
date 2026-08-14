@@ -32,6 +32,7 @@ public static partial class JetioEndpoints
         HttpContext context,
         StreamResolver resolver,
         SubtitleDelivery subtitles,
+        IOptions<JetioOptions> options,
         CancellationToken cancellationToken)
     {
         if (!ImdbIdRegex().IsMatch(imdbId))
@@ -42,9 +43,8 @@ public static partial class JetioEndpoints
         return await RespondAsync(
                 resolver,
                 subtitles,
-                "movie",
-                imdbId,
-                () => subtitles.ForMovie(imdbId),
+                options,
+                TitleRef.Movie(imdbId),
                 context,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -57,6 +57,7 @@ public static partial class JetioEndpoints
         HttpContext context,
         StreamResolver resolver,
         SubtitleDelivery subtitles,
+        IOptions<JetioOptions> options,
         CancellationToken cancellationToken)
     {
         if (!ImdbIdRegex().IsMatch(imdbId))
@@ -69,14 +70,11 @@ public static partial class JetioEndpoints
             return Results.BadRequest(new { error = "Season must be >= 0 and episode >= 1" });
         }
 
-        var stremioId = string.Create(CultureInfo.InvariantCulture, $"{imdbId}:{season}:{episode}");
-
         return await RespondAsync(
                 resolver,
                 subtitles,
-                "series",
-                stremioId,
-                () => subtitles.ForEpisode(imdbId, season, episode),
+                options,
+                TitleRef.Series(imdbId, season, episode),
                 context,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -85,12 +83,12 @@ public static partial class JetioEndpoints
     private static async Task<IResult> RespondAsync(
         StreamResolver resolver,
         SubtitleDelivery subtitles,
-        string type,
-        string stremioId,
-        Func<IReadOnlyList<SubtitleTrack>> findSubtitles,
+        IOptions<JetioOptions> options,
+        TitleRef title,
         HttpContext context,
         CancellationToken cancellationToken)
     {
+        var (type, stremioId) = (title.Type, title.StremioId);
         var request = context.Request;
         // ?debug=1 shows every candidate and why it was or wasn't picked.
         if (request.Query.ContainsKey("debug"))
@@ -124,16 +122,15 @@ public static partial class JetioEndpoints
             return Results.NotFound(new { error = "No playable stream found", type, id = stremioId });
         }
 
-        // With subtitles beside the .strm, the stream is rebuilt with them muxed in — the only
-        // form several clients render reliably. Without any, a 302 keeps jetio out of the data
-        // path entirely, so range requests and seeking go straight to the streaming server.
-        var tracks = findSubtitles();
+        // With subtitles beside the .strm, the title is served as HLS: the player gets them as
+        // renditions of the stream it is already playing, which is the only form several clients
+        // render, and the playlist is what lets it seek. Without any, a 302 keeps jetio out of
+        // the data path entirely and seeking goes straight to the streaming server.
+        var tracks = subtitles.For(title);
 
-        if (subtitles.ShouldMux(tracks))
+        if (subtitles.ShouldServeThroughJetio(tracks))
         {
-            return await subtitles
-                .StreamAsync(resolved, tracks, context, cancellationToken)
-                .ConfigureAwait(false);
+            return Results.Redirect(HlsEndpoints.MasterUrl(options.Value, title), permanent: false);
         }
 
         return Results.Redirect(resolved.Url, permanent: false);

@@ -54,7 +54,8 @@ builder.Services.AddSingleton<MediaAnalysisQueue>();
 
 builder.Services.AddSingleton<SubtitleLocator>();
 builder.Services.AddSingleton<MediaProbe>();
-builder.Services.AddSingleton<SubtitleMuxer>();
+builder.Services.AddSingleton<FfmpegRunner>();
+builder.Services.AddSingleton<HlsStreamer>();
 builder.Services.AddSingleton<SubtitleDelivery>();
 
 builder.Services.AddScoped<StreamResolver>();
@@ -77,6 +78,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.MapJetioEndpoints();
+app.MapHls();
 app.MapLibraryApi();
 app.MapBrowseApi();
 app.MapPluginRepository();

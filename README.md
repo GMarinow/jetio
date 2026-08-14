@@ -267,19 +267,28 @@ Two things that look like they should help and do not:
 
 ### How subtitles reach the player
 
-When a title has subtitle files beside its `.strm`, jetio serves the release through ffmpeg with
-those tracks **muxed into the container**, rather than redirecting the player to the streaming
-server. The player then sees them as ordinary embedded tracks.
+When a title has subtitle files beside its `.strm`, jetio serves it as **HLS** — a playlist of
+segments, with each subtitle offered as a rendition of that stream — rather than redirecting the
+player to the streaming server.
 
-This is the only arrangement that works everywhere. A separate subtitle file has to be side-loaded
-onto a stream the player fetched from a different server, and the Jellyfin Android TV app does not
-do that — the track is listed and never drawn. Releases that happen to ship their own subtitles
-always played correctly on the same TV, which is exactly the behaviour this reproduces for
-downloaded ones.
+This is the only arrangement that gives you both subtitles and seeking.
 
-Nothing is re-encoded. Video and audio are copied and only the container is rebuilt, so the cost is
-bandwidth through jetio rather than CPU. It engages **only** for titles that actually have subtitle
-files — everything else still redirects, and jetio stays out of the data path.
+**Why not a separate subtitle file.** It has to be side-loaded onto a stream the player fetched
+from a different server, and the Jellyfin Android TV app does not do it: the track is listed and
+never drawn. Releases that happen to ship their own subtitles always played correctly on the same
+TV, which is the difference this closes. An HLS rendition is handled inside the player's own HLS
+engine, so there is nothing to side-load.
+
+**Why not one long muxed stream.** That was 1.1.0, and subtitles worked — but scrubbing did not,
+and the two turn out to be the same problem. ffmpeg writes a container's duration and seek index by
+going back over its own output once it knows them, and it is writing to a pipe. The result declares
+itself a live stream of unknown length with no index, so a player has nothing to seek against and
+can only restart from the beginning. A playlist declares the whole film up front from the duration
+alone, so a scrub is a request for a different segment.
+
+Nothing is re-encoded — video and audio are copied — so the cost is bandwidth through jetio rather
+than CPU. It engages **only** for titles that actually have subtitle files; everything else still
+redirects and jetio stays out of the data path.
 
 ```bash
 Jetio__Subtitles__MuxIntoStream=false   # back to redirecting, always
@@ -287,11 +296,10 @@ Jetio__Subtitles__MuxIntoStream=false   # back to redirecting, always
 
 Two things worth knowing:
 
-- **Seeking is approximate.** Players seek a progressive stream by byte offset; ffmpeg seeks by
-  time. For a variable-bitrate release there is no exact conversion, so the offset is placed
-  proportionally along the timeline — close, not exact. jetio learns the duration and size with one
-  `ffprobe` per release and caches it; if that fails it declines range requests rather than
-  seeking somewhere wrong.
+- **Segment boundaries are nominal.** Copying a stream means ffmpeg cuts at the nearest keyframe
+  rather than exactly on the second, so real segments drift slightly from the declared durations.
+  Players tolerate it, and Jellyfin's own remuxing path makes the same trade — it is what lets
+  seeking work without re-encoding the video.
 - **Subtitle files should be UTF-8.** jetio detects and declares a legacy encoding when it finds
   one, but converting them is better — see below.
 
