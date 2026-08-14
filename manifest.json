@@ -9,6 +9,14 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "1.2.0.0",
+        "changelog": "### Changed\n- **Subtitled titles are served as HLS, so they can be seeked.** 1.1.0 delivered subtitles by\n  rebuilding the release as one long Matroska stream. That worked — subtitles rendered on clients\n  that had never shown them — but it made scrubbing impossible, and the two are not independent.\n  ffmpeg writes a container's duration and seek index by going back over its own output once it\n  knows them, and it was writing to a pipe. The result declared itself a live stream of unknown\n  length with no index, so players had nothing to seek against and could only restart from the\n  beginning.\n  A playlist has no such problem. The whole film is declared up front from the duration alone, so\n  jumping two thirds of the way in is a request for a different segment rather than a guess into\n  an unindexed container. Video and audio are still copied rather than re-encoded.\n  Subtitles are now WebVTT renditions of the playlist rather than muxed tracks, because MPEG-TS\n  segments cannot car",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GMarinow/jetio/releases/download/v1.2.0/jellyfin-plugin-jetio-1.2.0.0.zip",
+        "checksum": "72de1d33540ad1e0a42cbe4fa229be3a",
+        "timestamp": "2026-08-14T17:54:13Z"
+      },
+      {
         "version": "1.1.0.0",
         "changelog": "### Added\n- **Subtitle files are muxed into the stream.** When a title has subtitles beside its `.strm`,\n  jetio now serves the release through ffmpeg with those tracks embedded, instead of redirecting\n  the player to the streaming server.\n  This is the only arrangement several clients render reliably. A separate subtitle file has to be\n  side-loaded onto a stream the player fetched from somewhere else, and the Jellyfin Android TV\n  app does not do that — the track appears in the menu and never draws. An embedded track is read\n  straight out of the container the player is already decoding, so there is nothing to side-load.\n  Releases that happen to ship their own subtitles always worked on that TV for exactly this\n  reason; this gives downloaded ones the same standing.\n  Nothing is re-encoded — video and audio are copied and only the container is rebuilt — so the\n  cost is bandwidth through jetio, not CPU. It engages **only** for titles that actually have\n  subtitle files, so eve",
         "targetAbi": "10.11.0.0",
