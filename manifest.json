@@ -9,6 +9,14 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "1.3.0.0",
+        "changelog": "### Changed\n- **Subtitles are drawn into the picture.** Every arrangement that offered the subtitle as a\n  *selectable track* failed on the Jellyfin Android TV app, for a different reason each time: a\n  file beside the `.strm` has to be side-loaded onto a stream the player fetched elsewhere, and an\n  HLS rendition is invisible to Jellyfin, whose apps decide which track to enable from Jellyfin's\n  own metadata. The subtitle was being served correctly in both cases and never reached the screen.\n  Burned in, there is no track to enable, nothing for Jellyfin to describe and no client decision\n  to get wrong. Seeking is unaffected — the playlist from 1.2.0 is unchanged.\n  This is the one thing here that re-encodes video, so it costs real CPU. Turn it off with\n  `Jetio__Subtitles__BurnIn=false` to get selectable renditions back at copy-only cost.\n### Fixed\n- Renditions are no longer advertised while burn-in is on, which would have offered a track that\n  painted a second copy over the first",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GMarinow/jetio/releases/download/v1.3.0/jellyfin-plugin-jetio-1.3.0.0.zip",
+        "checksum": "51499ee7983e8bb925e657b6df893faa",
+        "timestamp": "2026-08-14T18:41:01Z"
+      },
+      {
         "version": "1.2.1.0",
         "changelog": "### Fixed\n- **Subtitle tracks were advertised with no language.** Every subtitle came through as\n  \"External\" with no `LANGUAGE`, regardless of a `.bg` suffix on the filename. Players will not\n  switch on a text track whose language they cannot determine, so the track was effectively\n  unusable even though it was being served correctly.\n  The two-letter to three-letter conversion went through `CultureInfo`, which throws\n  `CultureNotFoundException` for every code in the runtime image — .NET runs there without ICU\n  data, in globalization-invariant mode. It works on a developer machine and fails everywhere it\n  matters. Replaced with an explicit table, so the result no longer depends on what the host has\n  installed.\n- **Unnamed subtitle files fall back to `Subtitles.DefaultLanguage`** rather than staying\n  undetermined, so a file without a language suffix is still selectable.",
         "targetAbi": "10.11.0.0",
