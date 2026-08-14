@@ -9,6 +9,14 @@
     "imageUrl": "",
     "versions": [
       {
+        "version": "1.0.1.0",
+        "changelog": "### Fixed\n- **Subtitles on releases picked from the version picker.** The plugin described every release it\n  offered as having no streams at all, so choosing one left the player with nothing to switch on —\n  in every client, the web one included. Jellyfin indexes the `.srt` files next to a `.strm`\n  against the item and attaches them only to the source it builds from the `.strm` itself; the\n  plugin's sources are separate and were never given them. They are now copied onto each release\n  the picker offers.\n  Embedded tracks are deliberately not copied: those belong to whichever release the `.strm`\n  currently resolves to, and their indexes mean nothing inside a different release's container.\n### Notes\n- **Subtitle burn-in ends playback, and no jetio change can fix it.** Selecting a downloaded\n  `.srt` with burn-in enabled drops the player back to the item page. Jellyfin detects the\n  subtitle's character set by opening it with the *media source's* protocol instead of the\n  subtitle'",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/GMarinow/jetio/releases/download/v1.0.1/jellyfin-plugin-jetio-1.0.1.0.zip",
+        "checksum": "3be50e5a98f41eeac0b86f1346bf5047",
+        "timestamp": "2026-08-14T15:54:07Z"
+      },
+      {
         "version": "1.0.0.0",
         "changelog": "First release.\n### Added\n- **Library service.** Writes a `.strm` tree Jellyfin reads as a normal library, and resolves\n  each entry to a live stream at play time so links never go stale.\n- **Web UI** for browsing and adding titles, with filters for type, order, genre and year.\n- **Jellyfin plugin** exposing every eligible release as a selectable version in the player,\n  with seeder counts and file sizes.\n- **Plugin repository** served by jetio itself, so the plugin can be installed from Jellyfin's\n  dashboard without internet access or a published release.\n- **Kids routing.** Animated titles are written to `Kids/Movies` and `Kids/Shows` so they can be\n  separate Jellyfin libraries with their own user access.\n- **Release verification.** Torrentio occasionally indexes the wrong film against an IMDb id — a\n  rip of *Iron Man* appears under *Spider-Man: Brand New Day*. Quality filtering makes this worse\n  rather than better, because for an unreleased title every genuine release is a cam ",
         "targetAbi": "10.11.0.0",
