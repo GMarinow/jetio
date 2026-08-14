@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace Jetio.Stremio;
 
-public sealed record ResolvedStream(string Url, StreamCandidate Candidate);
+public sealed record ResolvedStream(string Url, string Container, StreamCandidate Candidate);
 
 /// <summary>One selectable release, as offered to the Jellyfin version picker.</summary>
 public sealed record StreamOption(string Id, string Name, string Url, string Container, StreamCandidate Candidate);
@@ -128,7 +128,7 @@ public sealed class StreamResolver
             ? best.Stream.Url!
             : _stremioServer.BuildStreamUrl(best.Stream);
 
-        var resolved = new ResolvedStream(url, best);
+        var resolved = new ResolvedStream(url, GuessContainer(best), best);
 
         _cache.Set(cacheKey, resolved, TimeSpan.FromMinutes(_options.CacheMinutes));
 

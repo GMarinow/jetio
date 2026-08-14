@@ -62,3 +62,6 @@ services:
       - Jetio__Jellyfin__ApiKey=${JELLYFIN_API_KEY:-}
       # Comma-separated; expanded by Program.cs. Empty means every library is rescanned.
       - JELLYFIN_LIBRARY_NAMES=${JELLYFIN_LIBRARY_NAMES:-}
+      # Subtitle files beside a .strm are muxed into the stream. See .env.example.
+      - Jetio__Subtitles__MuxIntoStream=${JETIO_MUX_SUBTITLES:-true}
+      - Jetio__Subtitles__DefaultLanguage=${JETIO_SUBTITLE_LANGUAGE:-}

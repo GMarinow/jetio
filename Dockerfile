@@ -26,6 +26,12 @@ RUN dotnet publish src/Jetio/Jetio.csproj -c Release -o /app --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
+# ffmpeg muxes subtitle files into the stream; ffprobe reads the duration and size that make
+# seeking possible. Both are only invoked for titles that actually have subtitles beside them.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app .
 
 # /library is the .strm tree Jellyfin reads; /config holds jetio.json and library.json.

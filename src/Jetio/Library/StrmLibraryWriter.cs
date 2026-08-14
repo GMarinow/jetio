@@ -204,6 +204,33 @@ public sealed partial class StrmLibraryWriter
     }
 
     /// <summary>
+    /// The folder holding one title, matched on the [imdbid-…] tag the writer puts in its name.
+    /// Checks the kids root too, since a title's genres may have changed since it was written.
+    /// </summary>
+    public string? FindTitleFolder(MediaKind kind, string imdbId)
+    {
+        var marker = $"[imdbid-{imdbId}]";
+
+        foreach (var root in RootsFor(kind))
+        {
+            if (!Directory.Exists(root))
+            {
+                continue;
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (System.IO.Path.GetFileName(directory).Contains(marker, StringComparison.OrdinalIgnoreCase))
+                {
+                    return directory;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Deletes one title's folder outright, matched on the [imdbid-…] tag in its name.
     /// Used when a title is removed through the UI, so it vanishes immediately.
     /// </summary>

@@ -10,6 +10,41 @@ section below. Everything else is automated — see [Releasing](README.md#releas
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-14
+
+### Added
+
+- **Subtitle files are muxed into the stream.** When a title has subtitles beside its `.strm`,
+  jetio now serves the release through ffmpeg with those tracks embedded, instead of redirecting
+  the player to the streaming server.
+
+  This is the only arrangement several clients render reliably. A separate subtitle file has to be
+  side-loaded onto a stream the player fetched from somewhere else, and the Jellyfin Android TV
+  app does not do that — the track appears in the menu and never draws. An embedded track is read
+  straight out of the container the player is already decoding, so there is nothing to side-load.
+  Releases that happen to ship their own subtitles always worked on that TV for exactly this
+  reason; this gives downloaded ones the same standing.
+
+  Nothing is re-encoded — video and audio are copied and only the container is rebuilt — so the
+  cost is bandwidth through jetio, not CPU. It engages **only** for titles that actually have
+  subtitle files, so everything else still redirects and stays out of jetio's data path.
+
+  Turn it off with `Jetio__Subtitles__MuxIntoStream=false`.
+
+- **Legacy subtitle encodings are handled.** Cyrillic subtitles are still commonly distributed as
+  Windows-1251, which ffmpeg rejects outright with `Invalid UTF-8 in decoded subtitles text`,
+  failing the whole stream rather than one track. Files that are not UTF-8 now have their encoding
+  declared, chosen from the byte layout so a Western European file is not mangled into Cyrillic.
+
+### Notes
+
+- Seeking is approximate. Players seek a progressive stream by byte offset and ffmpeg seeks by
+  time, and for a variable-bitrate release there is no exact conversion — the offset is placed
+  proportionally along the timeline, which lands within a few seconds rather than exactly.
+  jetio learns the duration and size with one `ffprobe` per release, cached; if that fails, it
+  declines range requests rather than seeking to the wrong place.
+- The runtime image now carries ffmpeg, so it is larger.
+
 ## [1.0.1] - 2026-08-14
 
 ### Fixed
@@ -77,6 +112,7 @@ First release.
 - The Stremio streaming server binds to loopback inside its own container, so `docker-compose.yml`
   includes a `stremio-bridge` sidecar that re-exposes it on port 11471.
 
-[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/GMarinow/jetio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/GMarinow/jetio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/GMarinow/jetio/releases/tag/v1.0.0

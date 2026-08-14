@@ -149,6 +149,31 @@ It is deliberately thin: it implements `IMediaSourceProvider`, asks jetio for ra
 and maps them to Jellyfin media sources. All Torrentio querying, ranking and filtering stays in
 the service, so there is exactly one implementation of that logic.
 
+### Limits of the version picker
+
+**No Jellyfin client currently shows these versions**, on any platform. This is not a client bug
+and no plugin setting changes it.
+
+Clients build their version list from the item as Jellyfin describes it, and Jellyfin fills that
+in from `GetStaticMediaSources()` — the sources belonging to the file itself. Sources from an
+`IMediaSourceProvider` are *dynamic*: they are added by `GetPlaybackMediaSources()`, which runs
+when playback starts, after a version has already been chosen. So they exist, and they are
+reachable by id, but nothing offers them to you:
+
+```
+item as described to clients : 1 source     ← the .strm, and what plays
+playback info                : 12 sources   ← the .strm plus every release
+```
+
+Everything therefore plays the default `.strm` source, and the plugin's settings apply to sources
+that are never selected. Subtitles are handled in the service instead, by
+[muxing](#how-subtitles-reach-the-player), which is why that works regardless.
+
+The plugin is kept because the sources are correct and the limitation is Jellyfin's to lift. If
+selectable releases matter to you today, the approach that works is writing one `.strm` per
+release — `Title (Year) - 1080p.strm` alongside `Title (Year) - 720p.strm` — since Jellyfin groups
+those natively into real versions that every client displays.
+
 ### Installing
 
 In Jellyfin, go to **Dashboard → Plugins → Repositories → +** and add:
@@ -228,28 +253,52 @@ curl -X POST http://<JETIO_HOST_IP>:9000/api/library/tt0133093/analyze
 Analysis pulls the opening chunk of the torrent, so it is done one title at a time and **never**
 during a bulk catalog sync — that would start every title downloading at once.
 
-If subtitles still do not render afterwards, turn on **Serve playback through Jellyfin** in the
-plugin settings.
+If subtitles still do not render afterwards, the fix is [muxing](#how-subtitles-reach-the-player),
+which is on by default — not a Jellyfin setting.
 
-By default the client fetches the stream straight from the streaming server, so Jellyfin never
-handles a byte of it and cannot attach an external subtitle. Several clients side-load subtitles
-onto direct-played remote streams unreliably: the track appears in the menu and then does nothing.
+Two things that look like they should help and do not:
 
-With the option on, Jellyfin **remuxes** — it repackages the container while copying video and
-audio untouched, so there is no re-encoding — and subtitles then behave exactly as they do for
-local files.
+- **Serve playback through Jellyfin**, in the plugin settings. It only affects media sources the
+  plugin provides, and [those are unreachable](#limits-of-the-version-picker) — so it never
+  engages. Left in place for the day that changes.
+- **Capping the client's maximum bitrate.** Jellyfin does not apply bitrate limits to a remote
+  `.strm` source: it will report direct play with a 1 Mbps cap against a 2.7 Mbps release. So it
+  cannot be used to force Jellyfin into the data path, or as a diagnostic.
 
-What it costs:
+### How subtitles reach the player
 
-- video travels via Jellyfin rather than straight to the player,
-- seeking is slower, because the mux restarts on each jump,
-- it applies only to sources this plugin provides. Press play on the default source from the
-  `.strm` and Jellyfin builds that one itself, where the plugin has no say — so use the version
-  picker when you want subtitles.
+When a title has subtitle files beside its `.strm`, jetio serves the release through ffmpeg with
+those tracks **muxed into the container**, rather than redirecting the player to the streaming
+server. The player then sees them as ordinary embedded tracks.
 
-A quick way to confirm the diagnosis before changing anything: cap the client's maximum bitrate
-below the file's. That forces a transcode, which also puts Jellyfin in the data path. If
-subtitles appear, this option will fix it far more cheaply.
+This is the only arrangement that works everywhere. A separate subtitle file has to be side-loaded
+onto a stream the player fetched from a different server, and the Jellyfin Android TV app does not
+do that — the track is listed and never drawn. Releases that happen to ship their own subtitles
+always played correctly on the same TV, which is exactly the behaviour this reproduces for
+downloaded ones.
+
+Nothing is re-encoded. Video and audio are copied and only the container is rebuilt, so the cost is
+bandwidth through jetio rather than CPU. It engages **only** for titles that actually have subtitle
+files — everything else still redirects, and jetio stays out of the data path.
+
+```bash
+Jetio__Subtitles__MuxIntoStream=false   # back to redirecting, always
+```
+
+Two things worth knowing:
+
+- **Seeking is approximate.** Players seek a progressive stream by byte offset; ffmpeg seeks by
+  time. For a variable-bitrate release there is no exact conversion, so the offset is placed
+  proportionally along the timeline — close, not exact. jetio learns the duration and size with one
+  `ffprobe` per release and caches it; if that fails it declines range requests rather than
+  seeking somewhere wrong.
+- **Subtitle files should be UTF-8.** jetio detects and declares a legacy encoding when it finds
+  one, but converting them is better — see below.
+
+Files are matched by name. A movie folder holds one title, so any subtitle in it is used; season
+folders need the `S01E02` marker in the filename. A language suffix like `Film.bg.srt` sets the
+track's language so the player can label and pre-select it — without one the track still works,
+but shows as "Undefined".
 
 ### The player exits when an external subtitle is selected
 
@@ -389,6 +438,10 @@ Jetio__Catalogs__Cinemeta__Enabled=true
 | `StremioServer.BaseUrl` | — | LAN URL of the streaming server (port **11471**). |
 | `Jellyfin.LibraryNames` | `[]` | Libraries to rescan. Empty rescans everything. |
 | `Sync.IntervalHours` | `12` | How often catalogs are re-read and new episodes written. |
+| `Subtitles.MuxIntoStream` | `true` | Embed subtitle files found beside a `.strm`. Off means always redirect. |
+| `Subtitles.DefaultLanguage` | — | ISO code marked as the default track, e.g. `bg`. |
+| `Subtitles.Extensions` | `[".srt", ".ass", ".ssa"]` | What counts as a subtitle file. |
+| `Subtitles.MaxTracks` | `8` | Cap on how many are muxed into one stream. |
 
 ## HTTP API
 

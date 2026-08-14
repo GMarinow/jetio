@@ -3,6 +3,7 @@ using Jetio.Configuration;
 using Jetio.Endpoints;
 using Jetio.Jellyfin;
 using Jetio.Library;
+using Jetio.Streaming;
 using Jetio.Stremio;
 using Microsoft.Extensions.Options;
 
@@ -50,6 +51,11 @@ builder.Services.AddSingleton<StrmLibraryWriter>();
 builder.Services.AddSingleton<SyncState>();
 builder.Services.AddSingleton<ManagedLibraryStore>();
 builder.Services.AddSingleton<MediaAnalysisQueue>();
+
+builder.Services.AddSingleton<SubtitleLocator>();
+builder.Services.AddSingleton<MediaProbe>();
+builder.Services.AddSingleton<SubtitleMuxer>();
+builder.Services.AddSingleton<SubtitleDelivery>();
 
 builder.Services.AddScoped<StreamResolver>();
 builder.Services.AddScoped<LibrarySynchronizer>();

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Jetio.Configuration;
 using Jetio.Library;
+using Jetio.Streaming;
 using Jetio.Stremio;
 using Microsoft.Extensions.Options;
 
@@ -28,8 +29,9 @@ public static partial class JetioEndpoints
 
     private static async Task<IResult> ResolveMovieAsync(
         string imdbId,
-        HttpRequest request,
+        HttpContext context,
         StreamResolver resolver,
+        SubtitleDelivery subtitles,
         CancellationToken cancellationToken)
     {
         if (!ImdbIdRegex().IsMatch(imdbId))
@@ -37,15 +39,24 @@ public static partial class JetioEndpoints
             return Results.BadRequest(new { error = "Not an IMDb title id" });
         }
 
-        return await RespondAsync(resolver, "movie", imdbId, request, cancellationToken).ConfigureAwait(false);
+        return await RespondAsync(
+                resolver,
+                subtitles,
+                "movie",
+                imdbId,
+                () => subtitles.ForMovie(imdbId),
+                context,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task<IResult> ResolveEpisodeAsync(
         string imdbId,
         int season,
         int episode,
-        HttpRequest request,
+        HttpContext context,
         StreamResolver resolver,
+        SubtitleDelivery subtitles,
         CancellationToken cancellationToken)
     {
         if (!ImdbIdRegex().IsMatch(imdbId))
@@ -59,16 +70,28 @@ public static partial class JetioEndpoints
         }
 
         var stremioId = string.Create(CultureInfo.InvariantCulture, $"{imdbId}:{season}:{episode}");
-        return await RespondAsync(resolver, "series", stremioId, request, cancellationToken).ConfigureAwait(false);
+
+        return await RespondAsync(
+                resolver,
+                subtitles,
+                "series",
+                stremioId,
+                () => subtitles.ForEpisode(imdbId, season, episode),
+                context,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task<IResult> RespondAsync(
         StreamResolver resolver,
+        SubtitleDelivery subtitles,
         string type,
         string stremioId,
-        HttpRequest request,
+        Func<IReadOnlyList<SubtitleTrack>> findSubtitles,
+        HttpContext context,
         CancellationToken cancellationToken)
     {
+        var request = context.Request;
         // ?debug=1 shows every candidate and why it was or wasn't picked.
         if (request.Query.ContainsKey("debug"))
         {
@@ -101,8 +124,18 @@ public static partial class JetioEndpoints
             return Results.NotFound(new { error = "No playable stream found", type, id = stremioId });
         }
 
-        // 302 rather than a proxy: the player talks to the streaming server directly,
-        // so range requests and seeking are not funnelled through jetio.
+        // With subtitles beside the .strm, the stream is rebuilt with them muxed in — the only
+        // form several clients render reliably. Without any, a 302 keeps jetio out of the data
+        // path entirely, so range requests and seeking go straight to the streaming server.
+        var tracks = findSubtitles();
+
+        if (subtitles.ShouldMux(tracks))
+        {
+            return await subtitles
+                .StreamAsync(resolved, tracks, context, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         return Results.Redirect(resolved.Url, permanent: false);
     }
 

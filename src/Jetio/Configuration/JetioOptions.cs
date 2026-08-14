@@ -49,6 +49,55 @@ public sealed class JetioOptions
     public JellyfinOptions Jellyfin { get; set; } = new();
 
     public SyncOptions Sync { get; set; } = new();
+
+    public SubtitleOptions Subtitles { get; set; } = new();
+}
+
+/// <summary>
+/// Muxing subtitle files into the stream, so players see them as ordinary embedded tracks.
+///
+/// The alternative — leaving them as separate files beside the .strm — depends on the client
+/// side-loading them onto a stream Jellyfin never handled, which the Android TV app in
+/// particular does not do reliably. An embedded track is read straight out of the container the
+/// player is already decoding, so there is nothing to side-load and nothing to go wrong.
+/// </summary>
+public sealed class SubtitleOptions
+{
+    /// <summary>
+    /// When a title has subtitle files beside its .strm, serve the stream through ffmpeg with
+    /// those tracks muxed in rather than redirecting the player to the streaming server.
+    ///
+    /// Only engages for titles that actually have subtitles — everything else still redirects,
+    /// so the cost is paid per title rather than across the library. What it costs when it does
+    /// engage: video flows through jetio, and seeking is approximate (see
+    /// <see cref="MuxOptions"/> on the endpoint for why).
+    /// </summary>
+    public bool MuxIntoStream { get; set; } = true;
+
+    /// <summary>Subtitle extensions searched for beside a .strm, in preference order.</summary>
+    public List<string> Extensions { get; set; } = new() { ".srt", ".ass", ".ssa" };
+
+    /// <summary>
+    /// Cap on how many subtitle files are muxed. Subbuzz can leave a dozen next to one film,
+    /// and every extra track is another input ffmpeg has to open and keep in step.
+    /// </summary>
+    public int MaxTracks { get; set; } = 8;
+
+    /// <summary>
+    /// Language code marked as the default track, so the player selects it without being asked.
+    /// Two- or three-letter ISO; empty leaves the choice to the player.
+    /// </summary>
+    public string DefaultLanguage { get; set; } = string.Empty;
+
+    public string FfmpegPath { get; set; } = "ffmpeg";
+
+    public string FfprobePath { get; set; } = "ffprobe";
+
+    /// <summary>
+    /// How long ffprobe may spend learning the stream's duration and size, which is what makes
+    /// seeking possible. Kept short: a slow answer delays the start of playback.
+    /// </summary>
+    public int ProbeTimeoutSeconds { get; set; } = 30;
 }
 
 public sealed class TorrentioOptions
