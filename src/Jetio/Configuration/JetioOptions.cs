@@ -74,6 +74,22 @@ public sealed class SubtitleOptions
     /// </summary>
     public bool MuxIntoStream { get; set; } = true;
 
+    /// <summary>
+    /// Draw the subtitle into the picture instead of offering it as a selectable track.
+    ///
+    /// This exists because selectable tracks keep not arriving. A separate file has to be
+    /// side-loaded, which the Android TV app will not do; an HLS rendition is invisible to
+    /// Jellyfin, so its apps never offer it. Burned in, the subtitle is part of the video —
+    /// there is no track to enable and nothing for a client to mishandle.
+    ///
+    /// It costs a video re-encode, which is the only thing here that does. Turn it off to get
+    /// selectable renditions back, with the copy-only cost, if your clients honour them.
+    /// </summary>
+    public bool BurnIn { get; set; } = true;
+
+    /// <summary>Quality of the burned-in re-encode. Lower is better and larger; 23 is a sane default.</summary>
+    public int BurnInQuality { get; set; } = 23;
+
     /// <summary>Subtitle extensions searched for beside a .strm, in preference order.</summary>
     public List<string> Extensions { get; set; } = new() { ".srt", ".ass", ".ssa" };
 

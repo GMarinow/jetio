@@ -52,7 +52,9 @@ public static class HlsEndpoints
             return Results.NotFound(new { error = "No playable stream found" });
         }
 
-        var tracks = subtitles.For(reference);
+        // Burned-in subtitles are already in the picture. Advertising them as renditions too
+        // would show the viewer a track that draws a second copy over the first.
+        var tracks = subtitles.AdvertisedTracks(reference);
 
         return Results.Text(
             HlsPlaylists.BuildMaster(BaseUrl(options.Value, reference), tracks),
@@ -98,6 +100,7 @@ public static class HlsEndpoints
         int index,
         HttpContext context,
         StreamResolver resolver,
+        SubtitleDelivery subtitles,
         HlsStreamer streamer,
         CancellationToken cancellationToken)
     {
@@ -118,7 +121,7 @@ public static class HlsEndpoints
         context.Response.ContentType = HlsStreamer.SegmentContentType;
 
         await streamer
-            .WriteSegmentAsync(resolved, index, context.Response.Body, cancellationToken)
+            .WriteSegmentAsync(resolved, index, subtitles.For(reference), context.Response.Body, cancellationToken)
             .ConfigureAwait(false);
 
         return Results.Empty;

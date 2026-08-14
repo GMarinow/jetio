@@ -1,5 +1,7 @@
 using System.Globalization;
+using Jetio.Configuration;
 using Jetio.Stremio;
+using Microsoft.Extensions.Options;
 
 namespace Jetio.Streaming;
 
@@ -18,15 +20,18 @@ public sealed class HlsStreamer
     public const string SubtitleContentType = "text/vtt";
 
     private readonly FfmpegRunner _ffmpeg;
+    private readonly SubtitleOptions _options;
 
-    public HlsStreamer(FfmpegRunner ffmpeg)
+    public HlsStreamer(FfmpegRunner ffmpeg, IOptions<JetioOptions> options)
     {
         _ffmpeg = ffmpeg;
+        _options = options.Value.Subtitles;
     }
 
     public Task WriteSegmentAsync(
         ResolvedStream resolved,
         int index,
+        IReadOnlyList<SubtitleTrack> tracks,
         Stream destination,
         CancellationToken cancellationToken)
     {
@@ -36,6 +41,8 @@ public sealed class HlsStreamer
         var length = ((double)HlsPlaylists.SegmentSeconds)
             .ToString("0.###", CultureInfo.InvariantCulture);
 
+        var burn = _options.BurnIn && tracks.Count > 0 ? tracks[0] : null;
+
         List<string> arguments =
         [
             "-hide_banner", "-nostdin", "-loglevel", "error",
@@ -43,22 +50,70 @@ public sealed class HlsStreamer
             // Seeking before the input jumps straight to the position instead of decoding up to
             // it, which is what keeps a scrub from pulling the whole torrent to get there.
             "-ss", start,
-            "-i", resolved.Url,
-            "-t", length,
-
-            "-map", "0:v:0",
-            "-map", "0:a?",
-            "-c", "copy",
-
-            // Timestamps restart at zero in every segment otherwise, and the player stitches them
-            // into a film that jumps back to the beginning six seconds at a time.
-            "-output_ts_offset", start,
-            "-muxdelay", "0",
-            "-f", "mpegts",
-            "-",
         ];
 
+        // Absolute timestamps have to survive into the filter graph, or the subtitles filter —
+        // which works from the times written in the file — draws the opening line over every
+        // segment. Jellyfin's own burn-in path uses the same pairing for the same reason.
+        if (burn is not null)
+        {
+            arguments.Add("-copyts");
+        }
+
+        arguments.AddRange(["-i", resolved.Url, "-t", length, "-map", "0:v:0", "-map", "0:a?"]);
+
+        if (burn is null)
+        {
+            arguments.AddRange(["-c", "copy"]);
+        }
+        else
+        {
+            arguments.AddRange(["-vf", BuildSubtitleFilter(burn)]);
+
+            // Drawing into the picture means the video cannot be copied. Audio is re-encoded too:
+            // it is cheap next to the video, and it removes the chance of a codec MPEG-TS cannot
+            // carry failing the segment after the expensive part has already been done.
+            arguments.AddRange(
+            [
+                "-c:v", "libx264",
+                "-preset", "veryfast",
+                "-crf", _options.BurnInQuality.ToString(CultureInfo.InvariantCulture),
+                "-c:a", "aac",
+                "-b:a", "256k",
+                "-avoid_negative_ts", "disabled",
+            ]);
+        }
+
+        // Timestamps restart at zero in every segment otherwise, and the player stitches them
+        // into a film that jumps back to the beginning six seconds at a time. With -copyts they
+        // are already absolute, so offsetting again would double it.
+        if (burn is null)
+        {
+            arguments.AddRange(["-output_ts_offset", start]);
+        }
+
+        arguments.AddRange(["-muxdelay", "0", "-f", "mpegts", "-"]);
+
         return _ffmpeg.RunAsync(arguments, destination, $"segment {index}", cancellationToken);
+    }
+
+    /// <summary>
+    /// Filter arguments are parsed, not passed through, so the path has to be escaped twice over:
+    /// once for the filter graph's own separators and once for the option value. A library path
+    /// with an apostrophe in a film's title breaks this otherwise.
+    /// </summary>
+    private static string BuildSubtitleFilter(SubtitleTrack track)
+    {
+        var path = track.Path
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace(":", "\\:", StringComparison.Ordinal)
+            .Replace("'", "\\'", StringComparison.Ordinal);
+
+        var filter = $"subtitles=f='{path}'";
+
+        return SubtitleEncoding.Detect(track.Path) is { } charset
+            ? $"{filter}:charenc={charset}"
+            : filter;
     }
 
     /// <summary>

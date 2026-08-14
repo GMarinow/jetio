@@ -8,6 +8,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Releases are cut by bumping `version` in [version.json](version.json) and adding a matching
 section below. Everything else is automated — see [Releasing](README.md#releasing).
 
+## [1.3.0] - 2026-08-14
+
+### Changed
+
+- **Subtitles are drawn into the picture.** Every arrangement that offered the subtitle as a
+  *selectable track* failed on the Jellyfin Android TV app, for a different reason each time: a
+  file beside the `.strm` has to be side-loaded onto a stream the player fetched elsewhere, and an
+  HLS rendition is invisible to Jellyfin, whose apps decide which track to enable from Jellyfin's
+  own metadata. The subtitle was being served correctly in both cases and never reached the screen.
+
+  Burned in, there is no track to enable, nothing for Jellyfin to describe and no client decision
+  to get wrong. Seeking is unaffected — the playlist from 1.2.0 is unchanged.
+
+  This is the one thing here that re-encodes video, so it costs real CPU. Turn it off with
+  `Jetio__Subtitles__BurnIn=false` to get selectable renditions back at copy-only cost.
+
+### Fixed
+
+- Renditions are no longer advertised while burn-in is on, which would have offered a track that
+  painted a second copy over the first.
+
 ## [1.2.1] - 2026-08-14
 
 ### Fixed
@@ -159,7 +180,8 @@ First release.
 - The Stremio streaming server binds to loopback inside its own container, so `docker-compose.yml`
   includes a `stremio-bridge` sidecar that re-exposes it on port 11471.
 
-[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/GMarinow/jetio/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/GMarinow/jetio/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/GMarinow/jetio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/GMarinow/jetio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/GMarinow/jetio/compare/v1.0.1...v1.1.0

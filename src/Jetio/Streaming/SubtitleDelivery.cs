@@ -59,6 +59,13 @@ public sealed class SubtitleDelivery
             .ToList();
     }
 
+    /// <summary>
+    /// What the playlist offers as selectable tracks. Nothing, when subtitles are drawn into the
+    /// picture — the viewer would otherwise be given a track that paints a second copy on top.
+    /// </summary>
+    public IReadOnlyList<SubtitleTrack> AdvertisedTracks(TitleRef title) =>
+        _options.BurnIn ? Array.Empty<SubtitleTrack>() : For(title);
+
     public bool ShouldServeThroughJetio(IReadOnlyList<SubtitleTrack> tracks) =>
         _options.MuxIntoStream && tracks.Count > 0;
 
